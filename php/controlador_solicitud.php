@@ -11,7 +11,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // 1.- Variables
     $encabezado  = trim($_POST["titulo"]      ?? "");
     $descripcion = trim($_POST["descripcion"] ?? "");
-    $prioridad   = trim($_POST["prioridad"]   ?? "");
+    $prioridad   = "Sin Asignar";
     $id_us       = $_SESSION["id"];
 
     // 2.- Validaciones
@@ -22,7 +22,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (strlen($descripcion) <= 10) {
         $errores[] = "La descripción debe tener más de 10 caracteres.";
     }
-    if (!in_array($prioridad, ["Alta", "Media", "Baja"])) {
+    if (!in_array($prioridad, ["Alta", "Media", "Baja", "Sin Asignar"])) {
         $errores[] = "Prioridad no válida.";
     }
 

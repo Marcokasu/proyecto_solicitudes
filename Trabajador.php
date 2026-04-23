@@ -15,7 +15,7 @@ require_once "php/conexion.php";
 
 //  Trae solicitudes si la solicitud es id_estado = 1 (pendientes).
 $stmtSolicitudes = $conexion->prepare(
-    "SELECT s.id_sol, s.encabezado, s.descripcion, s.prioridad, s.fecha_creacion,
+    "SELECT s.id_sol, s.encabezado, s.descripcion, s.prioridad, s.fecha_creacion, s.fecha_limite,
             e.nombre AS estado,
             u.nombre AS solicitante_nombre, u.app AS solicitante_app,
             a.nombre AS area
@@ -30,6 +30,25 @@ $stmtSolicitudes->execute();
 $solicitudes = $stmtSolicitudes->get_result();
 $totalSolicitudes = $solicitudes->num_rows;
 $stmtSolicitudes->close();
+
+// Trae las asignaciones activas y completadas del trabajador
+$stmtAsignaciones = $conexion->prepare(
+    "SELECT a.id_asg, a.estado_asignacion, a.fecha_inicio, a.fecha_fin,
+            s.encabezado, s.prioridad,
+            ar.nombre AS area
+     FROM asignacion a
+     JOIN solicitud s ON a.id_sol = s.id_sol
+     JOIN usuario u ON s.id_us = u.id_us
+     JOIN area ar ON u.id_area = ar.id_area
+     WHERE a.id_trabajador = ?
+       AND a.estado_asignacion != 'cancelada'
+     ORDER BY a.estado_asignacion ASC, a.fecha_inicio DESC"
+);
+$stmtAsignaciones->bind_param("i", $_SESSION["id"]);
+$stmtAsignaciones->execute();
+$asignaciones = $stmtAsignaciones->get_result();
+$totalAsignaciones = $asignaciones->num_rows;
+$stmtAsignaciones->close();
 ?>
 
 <!-- HTML -->
@@ -72,6 +91,12 @@ $stmtSolicitudes->close();
                 Solicitudes
                 <?php if ($totalSolicitudes > 0): ?>
                     <span class="nav-contador"><?= $totalSolicitudes ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="#" class="nav-link nav-item" data-section="mis-asignaciones">
+                Solicitudes Aceptadas
+                <?php if ($totalAsignaciones > 0): ?>
+                    <span class="nav-contador"><?= $totalAsignaciones ?></span>
                 <?php endif; ?>
             </a>
             <a href="#" class="nav-link nav-item" data-section="reporte">Reporte de Solicitud</a>
@@ -122,6 +147,7 @@ $stmtSolicitudes->close();
                                         $prioridad   = strtolower($s->prioridad);
                                         $solicitante = htmlspecialchars($s->solicitante_nombre . " " . $s->solicitante_app);
                                         $fecha       = date("d/m/Y", strtotime($s->fecha_creacion));
+                                        $fechalimite = date("d/m/Y", strtotime($s->fecha_limite));
                                     ?>
                                     <div class="tarjeta-solicitud solicitud-item" data-id="<?= $s->id_sol ?>">
                                         <div class="barra-prioridad <?= $prioridad ?>"></div>
@@ -132,7 +158,8 @@ $stmtSolicitudes->close();
                                             <div class="solicitud-meta">
                                                 <span><strong>Usuario:</strong> <?= $solicitante ?></span>
                                                 <span><strong>Área:</strong> <?= htmlspecialchars($s->area) ?></span>
-                                                <span><strong>Fecha:</strong> <?= $fecha ?></span>
+                                                <span><strong>Fecha de publicación:</strong> <?= $fecha ?></span>
+                                                <span><strong>Fecha límite:</strong> <?= $fechalimite ?></span>
                                             </div>
                                             <p style="font-size:12px; margin-top:5px; color:#4d5a7a;">
                                                 <?= htmlspecialchars($s->descripcion) ?>
@@ -260,11 +287,163 @@ $stmtSolicitudes->close();
                     </div>
                 </div>
             </div>
+            
+            <!-- MIS ASIGNACIONES -->
+            <div id="mis-asignaciones" class="section" style="display:none;">
+                <div class="tarjeta">
+                    <div class="tarjeta-encabezado">
+                        <div class="tarjeta-titulo">Mis Asignaciones</div>
+                    </div>
 
+                    <?php if ($totalAsignaciones === 0): ?>
+                        <div class="tarjeta-cuerpo">
+                            <p style="color:#8f98b2; text-align:center;">No tienes asignaciones activas.</p>
+                        </div>
+                    <?php else: ?>
+
+                        <!-- ACTIVAS -->
+                        <?php
+                            $hayActivas = false;
+                            $hayCompletadas = false;
+                            // Separar en dos arrays para renderizar en bloques distintos
+                            $listaActivas = [];
+                            $listaCompletadas = [];
+                            while ($a = $asignaciones->fetch_object()) {
+                                if ($a->estado_asignacion === 'activa') $listaActivas[] = $a;
+                                else $listaCompletadas[] = $a;
+                            }
+                        ?>
+
+                        <?php if (!empty($listaActivas)): ?>
+                            <div style="padding: 12px 16px 4px;">
+                                <p style="font-size:11px; font-weight:700; color:#8f98b2; text-transform:uppercase; letter-spacing:1px;">
+                                    Activas
+                                </p>
+                            </div>
+                            <div class="contenedor-tabla">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Título</th>
+                                            <th>Área</th>
+                                            <th>Prioridad</th>
+                                            <th>Fecha Inicio</th>
+                                            <th>Fecha Fin</th>
+                                            <th>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($listaActivas as $a): ?>
+                                            <tr>
+                                                <td><strong><?= htmlspecialchars($a->encabezado) ?></strong></td>
+                                                <td class="texto-apagado"><?= htmlspecialchars($a->area) ?></td>
+                                                <td>
+                                                    <?php
+                                                        $clasePrioridad = match(strtolower($a->prioridad)) {
+                                                            'alta'  => 'etiqueta-alta',
+                                                            'media' => 'etiqueta-media',
+                                                            'baja'  => 'etiqueta-baja',
+                                                            default => ''
+                                                        };
+                                                    ?>
+                                                    <span class="etiqueta <?= $clasePrioridad ?>"><?= htmlspecialchars($a->prioridad) ?></span>
+                                                </td>
+                                                <td class="texto-apagado"><?= date("d/m/Y", strtotime($a->fecha_inicio)) ?></td>
+                                                <td class="texto-apagado">
+                                                    <?= $a->fecha_fin ? date("d/m/Y", strtotime($a->fecha_fin)) : '—' ?>
+                                                </td>
+                                                <td><span class="etiqueta etiqueta-proceso">Activa</span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- COMPLETADAS -->
+                        <?php if (!empty($listaCompletadas)): ?>
+                            <div style="padding: 12px 16px 4px; margin-top: 8px;">
+                                <p style="font-size:11px; font-weight:700; color:#8f98b2; text-transform:uppercase; letter-spacing:1px;">
+                                    Completadas
+                                </p>
+                            </div>
+                            <div class="contenedor-tabla">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Título</th>
+                                            <th>Área</th>
+                                            <th>Prioridad</th>
+                                            <th>Fecha Inicio</th>
+                                            <th>Fecha Fin</th>
+                                            <th>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($listaCompletadas as $a): ?>
+                                            <tr>
+                                                <td><strong><?= htmlspecialchars($a->encabezado) ?></strong></td>
+                                                <td class="texto-apagado"><?= htmlspecialchars($a->area) ?></td>
+                                                <td>
+                                                    <?php
+                                                        $clasePrioridad = match(strtolower($a->prioridad)) {
+                                                            'alta'  => 'etiqueta-alta',
+                                                            'media' => 'etiqueta-media',
+                                                            'baja'  => 'etiqueta-baja',
+                                                            default => ''
+                                                        };
+                                                    ?>
+                                                    <span class="etiqueta <?= $clasePrioridad ?>"><?= htmlspecialchars($a->prioridad) ?></span>
+                                                </td>
+                                                <td class="texto-apagado"><?= date("d/m/Y", strtotime($a->fecha_inicio)) ?></td>
+                                                <td class="texto-apagado">
+                                                    <?= $a->fecha_fin ? date("d/m/Y", strtotime($a->fecha_fin)) : '—' ?>
+                                                </td>
+                                                <td><span class="etiqueta etiqueta-completada">Completada</span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </div>
 
     <script src="js/comun.js"></script>
     <script src="js/trabajador.js"></script>
+
+    <!-- Modal de prioridad al aceptar solicitud -->
+    <div id="modalPrioridad" class="fondo-modal">
+        <div class="modal" style="max-width:360px;">
+            <div class="modal-encabezado">
+                <div class="modal-titulo">Asignar Prioridad</div>
+                <button class="modal-cerrar" onclick="cerrarModalPrioridad()">✕</button>
+            </div>
+            <div class="modal-divisor"></div>
+            <p style="font-size:13px; color:#4d5a7a; margin-bottom:16px;">
+                Selecciona la prioridad para esta solicitud antes de aceptarla.
+            </p>
+            <form id="formAceptar" method="POST" action="php/controlador_trabajador.php">
+                <input type="hidden" name="accion" value="aceptar">
+                <input type="hidden" name="id_sol" id="modal-id-sol">
+                <div class="grupo-form">
+                    <label class="etiqueta-form" for="modal-prioridad">Prioridad</label>
+                    <select class="campo-form" id="modal-prioridad" name="prioridad" required>
+                        <option value="" disabled selected>Seleccionar...</option>
+                        <option value="Alta">Alta</option>
+                        <option value="Media">Media</option>
+                        <option value="Baja">Baja</option>
+                    </select>
+                </div>
+                <div class="modal-pie">
+                    <button type="submit" class="btn btn-primario">Confirmar</button>
+                    <button type="button" class="btn btn-fantasma" onclick="cerrarModalPrioridad()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </body>
 </html>

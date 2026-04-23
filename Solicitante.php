@@ -15,20 +15,42 @@ unset($_SESSION["exito"], $_SESSION["error"]);
 require_once "php/conexion.php";
 
 $stmtSolicitudes = $conexion->prepare(
-    "SELECT s.id_sol, s.encabezado, s.prioridad, s.fecha_creacion,
-            e.nombre AS estado, a.nombre AS area
-    FROM solicitud s
-    JOIN estado_solicitud e ON s.id_estado = e.id_estado
-    JOIN usuario u ON s.id_us = u.id_us
-    JOIN area a ON u.id_area = a.id_area
-    WHERE s.id_us = ?
-    ORDER BY s.fecha_creacion DESC"
+    "SELECT s.id_sol, s.encabezado, s.prioridad, s.fecha_creacion, s.fecha_limite,
+            e.nombre AS estado, ar.nombre AS area,
+            a.fecha_fin AS fecha_fin_asignacion
+     FROM solicitud s
+     JOIN estado_solicitud e ON s.id_estado = e.id_estado
+     JOIN usuario u ON s.id_us = u.id_us
+     JOIN area ar ON u.id_area = ar.id_area
+     LEFT JOIN asignacion a ON a.id_sol = s.id_sol
+                            AND a.estado_asignacion = 'activa'
+     WHERE s.id_us = ?
+     ORDER BY s.fecha_creacion DESC"
 );
 $stmtSolicitudes->bind_param("i", $_SESSION["id"]);
 $stmtSolicitudes->execute();
 $solicitudes = $stmtSolicitudes->get_result();
 $totalSolicitudes = $solicitudes->num_rows;
 $stmtSolicitudes->close();
+
+// Trae las asignaciones activas y completadas del trabajador
+$stmtAsignaciones = $conexion->prepare(
+    "SELECT a.id_asg, a.estado_asignacion, a.fecha_inicio, a.fecha_fin,
+            s.encabezado, s.prioridad,
+            ar.nombre AS area
+     FROM asignacion a
+     JOIN solicitud s ON a.id_sol = s.id_sol
+     JOIN usuario u ON s.id_us = u.id_us
+     JOIN area ar ON u.id_area = ar.id_area
+     WHERE a.id_trabajador = ?
+       AND a.estado_asignacion != 'cancelada'
+     ORDER BY a.estado_asignacion ASC, a.fecha_inicio DESC"
+);
+$stmtAsignaciones->bind_param("i", $_SESSION["id"]);
+$stmtAsignaciones->execute();
+$asignaciones = $stmtAsignaciones->get_result();
+$totalAsignaciones = $asignaciones->num_rows;
+$stmtAsignaciones->close();
 ?>
 
 <!-- HTML -->
@@ -129,16 +151,6 @@ $stmtSolicitudes->close();
                                         <option>Recursos Humanos</option>
                                     </select>
                                 </div>
-                                <div class="grupo-form">
-                                    <label class="etiqueta-form" for="prioridad">Prioridad</label>
-                                    <!-- value con mayúscula inicial para que coincida con los valores en BD -->
-                                    <select class="campo-form" id="prioridad" name="prioridad" required>
-                                        <option value="">— Seleccionar —</option>
-                                        <option value="Alta">Alta</option>
-                                        <option value="Media">Media</option>
-                                        <option value="Baja">Baja</option>
-                                    </select>
-                                </div>
                             </div>
 
                             <div class="grupo-form">
@@ -190,6 +202,7 @@ $stmtSolicitudes->close();
                                     <th>Área</th>
                                     <th>Prioridad</th>
                                     <th>Fecha</th>
+                                    <th>Fecha límite</th>
                                     <th>Estado</th>
                                 </tr>
                             </thead>
@@ -222,6 +235,9 @@ $stmtSolicitudes->close();
                                                 default      => ''
                                             };
                                             $fecha = date("d/m/Y", strtotime($s->fecha_creacion));
+                                            $fechalimite = $s->fecha_fin_asignacion
+                                                ? date("d/m/Y", strtotime($s->fecha_fin_asignacion))
+                                                : date("d/m/Y", strtotime($s->fecha_limite));
                                         ?>
                                         <tr>
                                             <td><span class="texto-apagado texto-xs">#<?= $s->id_sol ?></span></td>
@@ -229,6 +245,7 @@ $stmtSolicitudes->close();
                                             <td><?= htmlspecialchars($s->area) ?></td>
                                             <td><span class="etiqueta <?= $clasePrioridad ?>"><?= htmlspecialchars($s->prioridad) ?></span></td>
                                             <td class="texto-apagado"><?= $fecha ?></td>
+                                            <td class=""><?= $fechalimite ?></td>
                                             <td>
                                                 <!-- Círculo de color dentro de la etiqueta -->
                                                 <span class="etiqueta <?= $claseEstado ?>">

@@ -1,6 +1,7 @@
 // Secciones de la página
 var titulosPagina = {
     solicitudes:    'Solicitudes',
+    'mis-asignaciones': 'Mis Asignaciones',
     reporte:        'Reporte de Solicitud',
     notificaciones: 'Notificaciones'
 };
@@ -11,20 +12,18 @@ inicializarNavegacion(titulosPagina);
 
 // Funciones para mostrar los distintos estados de las solicitudes en la interfaz de los trabajadores
 function aceptarSolicitud(button, id) {
-    var item = button.closest('.solicitud-item');
-    item.classList.add('accepted');
-    item.classList.remove('rejected');
-    item.querySelector('.status').innerHTML = '<strong>Estado:</strong> Aceptada';
-    item.querySelector('.buttons').style.display = 'none';
-    item.querySelector('.cancel-btn').style.display = 'flex';
-
-    var title = item.querySelector('h3').textContent;
-    var user = item.querySelectorAll('.solicitud-meta span')[0].textContent.replace('Usuario: ', '');
-    var area = item.querySelectorAll('.solicitud-meta span')[1].textContent.replace('Área: ', '');
-    var date = item.querySelectorAll('.solicitud-meta span')[2].textContent.replace('Fecha: ', '');
-
-    acceptedRequests[id] = { title: title, user: user, area: area, date: date };
+    document.getElementById('modal-id-sol').value = id;
+    document.getElementById('modalPrioridad').classList.add('abierto');
 }
+
+function cerrarModalPrioridad() {
+    document.getElementById('modalPrioridad').classList.remove('abierto');
+    document.getElementById('modal-prioridad').value = '';
+}
+
+document.getElementById('modalPrioridad').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalPrioridad();
+});
 
 function rechazarSolicitud(button) {
     var item = button.closest('.solicitud-item');
