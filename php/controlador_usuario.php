@@ -17,7 +17,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
         $password   = $_POST["password"]        ?? "";
         $password2  = $_POST["password2"]       ?? "";
         $id_rol     = (int)($_POST["id_rol"]    ?? 0);
-        $id_area    = (int)($_POST["id_area"]   ?? 0);
         $disponible = isset($_POST["disponible"]) ? (int)$_POST["disponible"] : 1;
 
         // 2.- Validaciones
@@ -33,9 +32,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
         }
         if (!in_array($id_rol, [1, 2])) {
             $errores[] = "Rol no válido.";
-        }
-        if ($id_area < 1) {
-            $errores[] = "Es necesario seleccionar por lo menos un área.";
         }
         if (!empty($errores)) {
             // Regresa los errores y los muestra en un mensaje
@@ -65,14 +61,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
         // 4. Hasheo de contraseña e inserción
         $hash = password_hash($password, PASSWORD_BCRYPT);
         $statement = $conexion->prepare(
-            "INSERT INTO usuario (nombre, app, apm, username, contrasena, id_rol, disponible, id_area)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO usuario (nombre, app, apm, username, contrasena, id_rol, disponible)
+            VALUES (?, ?, ?, ?, ?, ?, ?)"
         );
         $statement->bind_param(
-            // 5 "s" y 3 "i" para indicar que se tratan de 5 strings y 3 int.
-            "sssssiii",
+            "sssssii",
             $nombre, $app, $apm, $username,
-            $hash, $id_rol, $disponible, $id_area
+            $hash, $id_rol, $disponible
         );
         if ($statement->execute()) {
             $statement->close();
@@ -97,7 +92,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
         $password = $_POST["password"]       ?? "";
         $password2= $_POST["password2"]      ?? "";
         $id_rol   = (int)($_POST["id_rol"]   ?? 0);
-        $id_area  = (int)($_POST["id_area"]  ?? 0);
 
         // 2.- Validaciones
         $errores = [];
@@ -106,9 +100,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
         }
         if (!in_array($id_rol, [1, 2])) {
             $errores[] = "Rol no válido.";
-        }
-        if ($id_area < 1) {
-            $errores[] = "Es necesario seleccionar por lo menos un área.";
         }
         // Validación de contraseña solo si se quiere cambiar
         if (!empty($password)) {
@@ -145,24 +136,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
             // 4a. Con nuevo hasheo de contraseña
             $hash = password_hash($password, PASSWORD_BCRYPT);
             $statement = $conexion->prepare(
-                "UPDATE usuario SET nombre=?, app=?, apm=?, username=?, contrasena=?, id_rol=?, id_area=?
+                "UPDATE usuario SET nombre=?, app=?, apm=?, username=?, contrasena=?, id_rol=?
                  WHERE id_us=?"
             );
             $statement->bind_param(
-                // 4 "s", 1 "s" para el hash, y 3 "i"
-                "sssssiii",
-                $nombre, $app, $apm, $username, $hash, $id_rol, $id_area, $id_us
+                "sssssii",
+                $nombre, $app, $apm, $username, $hash, $id_rol, $id_us
             );
         } else {
             // 4b. Sin cambio de contraseña
             $statement = $conexion->prepare(
-                "UPDATE usuario SET nombre=?, app=?, apm=?, username=?, id_rol=?, id_area=?
+                "UPDATE usuario SET nombre=?, app=?, apm=?, username=?, id_rol=?
                  WHERE id_us=?"
             );
             $statement->bind_param(
-                // 4 "s" y 3 "i"
-                "ssssiiii",
-                $nombre, $app, $apm, $username, $id_rol, $id_area, $id_us
+                "ssssii",
+                $nombre, $app, $apm, $username, $id_rol, $id_us
             );
         }
         if ($statement->execute()) {

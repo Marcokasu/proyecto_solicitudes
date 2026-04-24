@@ -1,7 +1,7 @@
 // Secciones de la página
 var titulosPagina = {
     solicitudes:    'Solicitudes',
-    'mis-asignaciones': 'Mis Asignaciones',
+    'mis-asignaciones': 'Solicitudes Aceptadas',
     reporte:        'Reporte de Solicitud',
     notificaciones: 'Notificaciones'
 };
@@ -50,13 +50,50 @@ function cancelarSolicitud(button, id) {
 function crearReporte(id) {
     if (acceptedRequests[id]) {
         var datos = acceptedRequests[id];
-
         navegarSeccion('reporte', titulosPagina);
 
-        document.getElementById('report-title').textContent = datos.title;
+        // Pre-rellena título
         document.getElementById('titulo-reporte').value = 'Reporte de ' + datos.title;
-        document.getElementById('descripcion-reporte').value = 'Problema relacionado con ' + datos.title + ' en el área ' + datos.area + ' para el usuario ' + datos.user + '.';
+        document.getElementById('desc-problema').value  = '';
+        document.getElementById('desc-solucion').value  = '';
+
+        // Sincroniza el select y el hidden con el id de la solicitud
+        var select = document.getElementById('select-solicitud-reporte');
+        var hidden = document.getElementById('input-id-sol-reporte');
+
+        // Agrega la opción si no existe ya
+        var existe = false;
+        for (var i = 0; i < select.options.length; i++) {
+            if (select.options[i].value == id) { existe = true; break; }
+        }
+        if (!existe) {
+            var opcion = document.createElement('option');
+            opcion.value       = id;
+            opcion.textContent = datos.title;
+            select.appendChild(opcion);
+        }
+        select.value = id;
+        hidden.value = id;
+
     } else {
         alert('Esta solicitud no está aceptada.');
     }
 }
+
+// Sincronizar hidden al cambiar el select manualmente
+document.getElementById('select-solicitud-reporte').addEventListener('change', function() {
+    document.getElementById('input-id-sol-reporte').value = this.value;
+});
+
+// Sincronizar el select de reporte con el input hidden
+var selectReporte = document.getElementById('select-solicitud-reporte');
+if (selectReporte) {
+    selectReporte.addEventListener('change', function() {
+        document.getElementById('input-id-sol-reporte').value = this.value;
+    });
+}
+
+// Si ya hay una opción seleccionada al cargar, sincronizarla
+    if (selectReporte && selectReporte.value) {
+        document.getElementById('input-id-sol-reporte').value = selectReporte.value;
+    }

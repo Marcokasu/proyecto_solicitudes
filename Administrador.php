@@ -17,10 +17,9 @@ require_once "php/conexion.php";
 
 $stmtUsuarios = $conexion->prepare(
     "SELECT u.id_us, u.nombre, u.app, u.apm, u.username, u.contrasena, u.disponible,
-        u.id_rol, u.id_area, r.nombre AS rol, a.nombre AS area
+        u.id_rol, r.nombre AS rol
     FROM usuario u
     JOIN rol r ON u.id_rol = r.id_rol
-    JOIN area a ON u.id_area = a.id_area
     WHERE u.id_us != ? AND u.id_rol != 3
     ORDER BY u.nombre ASC"
 );
@@ -226,7 +225,6 @@ $stmtUsuarios->close();
                                 <tr>
                                     <th>Nombre</th>
                                     <th>Usuario</th>
-                                    <th>Área</th>
                                     <th>Rol</th>
                                     <th>Disponible</th>
                                     <th>Acciones</th>
@@ -255,7 +253,6 @@ $stmtUsuarios->close();
                                             </div>
                                         </td>
                                         <td class="texto-apagado"><?= htmlspecialchars($u->username) ?></td>
-                                        <td class="texto-apagado"><?= htmlspecialchars($u->area) ?></td>
                                         <td><span class="etiqueta <?= $claseRol ?>"><?= htmlspecialchars($u->rol) ?></span></td>
                                         <td>
                                             <?php if ($u->disponible): ?>
@@ -268,7 +265,7 @@ $stmtUsuarios->close();
                                             <div class="acciones-tabla">
                                                 <!-- Todos los datos del usuario se pasan al JS para pre-rellenar el modal sin necesidad de un fetch -->
                                                 <button class="btn btn-advertencia btn-pequeno"
-                                                        onclick="openModal('edit', <?= $u->id_us ?>, '<?= $nombreCompleto ?>', '<?= htmlspecialchars($u->nombre) ?>', '<?= htmlspecialchars($u->app) ?>', '<?= htmlspecialchars($u->apm ?? "") ?>', '<?= htmlspecialchars($u->username) ?>', <?= $u->id_rol ?>, <?= $u->id_area ?>)">
+                                                        onclick="openModal('edit', <?= $u->id_us ?>, '<?= htmlspecialchars($u->nombre) ?>', '<?= htmlspecialchars($u->app) ?>', '<?= htmlspecialchars($u->apm ?? "") ?>', '<?= htmlspecialchars($u->username) ?>', <?= $u->id_rol ?>)">
                                                     Editar
                                                 </button>
                                                 <button class="btn btn-peligro btn-pequeno"
@@ -345,25 +342,6 @@ $stmtUsuarios->close();
                         <option value="" disabled selected>Seleccionar...</option>
                         <option value="1">Solicitante</option>
                         <option value="2">Trabajador</option>
-                    </select>
-                </div>
-
-                <div class="grupo-form">
-                    <label class="etiqueta-form" for="user-area">Área</label>
-                    <select class="campo-form" id="user-area" name="id_area" required>
-                        <option value="" disabled selected>Seleccionar...</option>
-                        <option value="1">Docencia</option>
-                        <option value="2">Coordinación Académica</option>
-                        <option value="3">Servicios Escolares</option>
-                        <option value="4">Recursos Humanos</option>
-                    </select>
-                </div>
-
-                <div class="grupo-form">
-                    <label class="etiqueta-form" for="user-disponible">Disponible</label>
-                    <select class="campo-form" id="user-disponible" name="disponible">
-                        <option value="1" selected>Sí</option>
-                        <option value="0">No</option>
                     </select>
                 </div>
 

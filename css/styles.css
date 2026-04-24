@@ -333,6 +333,10 @@ input, select, textarea {
     font-size: 12px;
 }
 
+.btn-mediano {
+    padding: 5px 12px;
+    font-size: 24px;
+}
 
 .grupo-form {
     margin-bottom: 14px;

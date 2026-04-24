@@ -25,12 +25,9 @@ create table usuario(
     contrasena varchar(255) not null,
     id_rol int not null,
     disponible boolean default true, # INDICE ORDINARIO
-    id_area int not null,
     primary key(id_us),
     foreign key(id_rol) references rol(id_rol) on update cascade,
-    foreign key(id_area) references area(id_area) on update cascade
 );
-
 
 -- Tabla para definir los estados en los que se puede encontrar una solicitud (Pendiente, En Proceso, Finalizada)
 create table estado_solicitud(
@@ -44,14 +41,17 @@ create table solicitud(
     id_sol int auto_increment,
     id_us int not null,
     id_estado int not null default 1,
+    id_area int not null,
     encabezado varchar(255) not null,
     descripcion text not null,
-    prioridad enum('Baja','Media','Alta') not null, # INDICE ORDINARIO
+    prioridad enum('Sin Asignar','Baja','Media','Alta') not null, # INDICE ORDINARIO
     fecha_creacion datetime default current_timestamp, # INDICE ORDINARIO
+    fecha_limite DATETIME DEFAULT (CURRENT_TIMESTAMP + INTERVAL 1 WEEK),
     primary key(id_sol),
     foreign key(id_us) references usuario(id_us)
         on delete cascade,
-    foreign key(id_estado) references estado_solicitud(id_estado)
+    foreign key(id_estado) references estado_solicitud(id_estado),
+    foreign key(id_area) references area(id_area)
 );
 
 -- Tabla que relaciona una solicitud con el trabajador a la que fue asignada
@@ -81,17 +81,17 @@ create table notificacion(
         on delete cascade
 );
 
-
 -- Tabla que almacena los detalles y evidencias de una solicitud tras ser finalizada
 create table bitacora(
     id_bit int auto_increment,
     id_sol int not null,
     id_us int not null,
-    clasificacion enum('Soporte tecnico', 'Mantenimiento correctivo', 'Mantenimiento preventivo') not null, # INDICE ORDINARIO
     encabezado varchar(50) not null,
-    descripcion text not null, # INDICE TEXTO COMPLETO
-    evidencia varchar(255),
+    descripcion_problema text not null, # INDICE TEXTO COMPLETO
+    descripcion_solucion text not null,
+    evidencia text,
     fecha_registro datetime default current_timestamp, # INDICE ORDINARIO
+    aprobado boolean default false,
     primary key(id_bit),
     foreign key(id_sol) references solicitud(id_sol)
         on delete cascade,
@@ -114,3 +114,5 @@ check (length(descripcion) > 10);
 alter table usuario
 add constraint len_contrasena
 check (length(contrasena) >= 8);
+
+-- drop database solicitudes;
