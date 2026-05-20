@@ -41,6 +41,7 @@ input, select, textarea {
     flex: 1;
     display: flex;
     flex-direction: column;
+    transition: margin-left 0.25s ease;
     min-height: 100vh;
 }
 
@@ -55,6 +56,8 @@ input, select, textarea {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.25s ease, transform 0.25s ease;
 }
 
 .sidebar-marca {
@@ -335,7 +338,7 @@ input, select, textarea {
 
 .btn-mediano {
     padding: 5px 12px;
-    font-size: 24px;
+    font-size: 16px;
 }
 
 .grupo-form {
@@ -344,7 +347,7 @@ input, select, textarea {
 
 .etiqueta-form {
     display: block;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     color: #4d5a7a;
     margin-bottom: 5px;
@@ -484,6 +487,13 @@ tbody tr:hover {
 
 .barra-prioridad.baja {
     background-color: #2e6b3e;
+}
+
+
+.msj-instruccion{
+    color: black;
+    font-size: 14px;
+    margin-bottom: 6px;
 }
 
 
@@ -983,28 +993,312 @@ tbody tr:hover {
     width: 100%;
 }
 
+.contador-chars {
+    font-size: 11px;
+    color: #8f98b2;
+    margin-left: 4px;
+}
+
 @media (max-width: 900px) {
     .columnas-dashboard { grid-template-columns: 1fr; }
     .columnas-admin     { grid-template-columns: 1fr; }
     .layout-crear       { grid-template-columns: 1fr; }
 }
 
+/* Overlay para el sidebar en móvil (creado por JS, estilos aquí) */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 250;
+}
+.sidebar-overlay.visible { display: block; }
+
 @media (max-width: 768px) {
+    /* Sidebar como panel deslizable sobre el contenido */
     .sidebar {
-        width: 100%;
-        position: relative;
+        transform: translateX(-100%);
+        z-index: 300;
     }
+    body.sidebar-movil-abierta .sidebar {
+        transform: translateX(0);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Contenido siempre a ancho completo en móvil */
     .contenido-principal {
-        margin-left: 0;
+        margin-left: 0 !important;
     }
+
+    /* Espaciado interior reducido */
+    .cuerpo-pagina {
+        padding: 12px 10px;
+        gap: 12px;
+    }
+    .topbar {
+        padding: 0 12px;
+    }
+    .topbar-subtitulo {
+        display: none;
+    }
+
+    /* Formularios en columna única */
     .fila-form {
         grid-template-columns: 1fr;
     }
+
+    /* Encabezados de tarjeta flexibles */
+    .tarjeta-encabezado {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    /* Tarjetas de solicitud apiladas */
     .tarjeta-solicitud {
         flex-direction: column;
         align-items: flex-start;
     }
     .solicitud-acciones {
         width: 100%;
+        flex-wrap: wrap;
     }
+
+    /* Barra de búsqueda flexible */
+    .campo-busqueda {
+        min-width: 0;
+        max-width: none;
+        flex: 1 1 0;
+    }
+
+    /* Panel de notificaciones acotado al viewport */
+    .notif-panel {
+        width: calc(100vw - 24px);
+        right: -8px;
+    }
+
+    /* Botones del pie del modal */
+    .modal-pie {
+        flex-wrap: wrap;
+    }
+
+    /* Modal interior */
+    .modal {
+        padding: 18px 16px;
+    }
+}
+
+/* ── Notificaciones ── */
+.notif-contenedor {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.notif-boton {
+    background: none;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4a5568;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.notif-boton:hover {
+    background: #f0f2f8;
+}
+
+.notif-badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    background: #e74c3c;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    pointer-events: none;
+    line-height: 1;
+}
+
+.notif-panel {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    width: 310px;
+    background: #fff;
+    border: 1px solid #dde2ec;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    z-index: 200;
+    overflow: hidden;
+}
+
+.notif-panel.abierto {
+    display: block;
+}
+
+.notif-panel-encabezado {
+    padding: 12px 16px;
+    font-weight: 700;
+    font-size: 13px;
+    color: #1a2340;
+    border-bottom: 1px solid #dde2ec;
+}
+
+.notif-lista {
+    max-height: 380px;
+    overflow-y: auto;
+}
+
+.notif-vacio {
+    padding: 28px 16px;
+    text-align: center;
+    color: #8f98b2;
+    font-size: 13px;
+}
+
+.notif-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f2f8;
+    transition: background 0.12s;
+}
+
+.notif-item:last-child {
+    border-bottom: none;
+}
+
+.notif-item:hover {
+    background: #fafbfd;
+}
+
+.notif-mensaje {
+    font-size: 13px;
+    color: #2d3748;
+    line-height: 1.5;
+    margin-bottom: 6px;
+}
+
+.notif-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.notif-fecha {
+    font-size: 11px;
+    color: #8f98b2;
+}
+
+.notif-eliminar {
+    background: none;
+    border: none;
+    padding: 4px 5px;
+    border-radius: 5px;
+    color: #b0b8cc;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+    line-height: 1;
+}
+
+.notif-eliminar:hover {
+    color: #e74c3c;
+    background: #fef0f0;
+}
+
+/* ── Sidebar colapsable ─────────────────────────────────────── */
+.nav-icono {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    opacity: 0.7;
+}
+
+.nav-item:hover .nav-icono,
+.nav-item.active .nav-icono {
+    opacity: 1;
+}
+
+.btn-hamburguesa {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px 8px;
+    color: #64748b;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+
+.btn-hamburguesa:hover {
+    background: #f0f2f8;
+    color: #1a2340;
+}
+
+body.sidebar-colapsada .sidebar     { width: 56px; }
+body.sidebar-colapsada .contenido-principal { margin-left: 56px; }
+
+body.sidebar-colapsada .sidebar-marca {
+    padding: 14px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+body.sidebar-colapsada .marca-fila {
+    justify-content: center;
+    margin-bottom: 0;
+}
+
+body.sidebar-colapsada .marca-nombre,
+body.sidebar-colapsada .marca-subtitulo,
+body.sidebar-colapsada .usuario-pastilla,
+body.sidebar-colapsada .nav-etiqueta-seccion,
+body.sidebar-colapsada .nav-texto,
+body.sidebar-colapsada .nav-contador {
+    display: none !important;
+}
+
+body.sidebar-colapsada .sidebar-nav { padding: 10px 6px; }
+body.sidebar-colapsada .sidebar-pie { padding: 10px 6px; }
+
+body.sidebar-colapsada .nav-item {
+    justify-content: center;
+    padding: 10px;
+    gap: 0;
+}
+
+body.sidebar-colapsada .nav-icono {
+    width: 18px;
+    height: 18px;
+    opacity: 0.8;
+}
+
+body.sidebar-colapsada .nav-item:hover .nav-icono,
+body.sidebar-colapsada .nav-item.active .nav-icono {
+    opacity: 1;
+}
+
+body.sidebar-colapsada .btn-cerrar-sesion {
+    justify-content: center;
+    gap: 0;
+    padding: 10px;
 }

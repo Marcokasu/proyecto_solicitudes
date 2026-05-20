@@ -7,9 +7,10 @@ if (empty($_SESSION["id"]) || !is_numeric($_SESSION["id"]) || $_SESSION["id_rol"
     exit();
 }
 // Mensajes flash
-$msgExito = $_SESSION["exito"] ?? null;
-$msgError = $_SESSION["error"] ?? null;
-unset($_SESSION["exito"], $_SESSION["error"]);
+$msgExito      = $_SESSION["exito"]          ?? null;
+$msgError      = $_SESSION["error"]          ?? null;
+$seccionActiva = $_SESSION["seccion_activa"] ?? null;
+unset($_SESSION["exito"], $_SESSION["error"], $_SESSION["seccion_activa"]);
 
 require_once "php/conexion.php";
 
@@ -31,14 +32,17 @@ $solicitudes = $stmtSolicitudes->get_result();
 $totalSolicitudes = $solicitudes->num_rows;
 $stmtSolicitudes->close();
 
-// Trae las asignaciones activas y completadas del trabajador
+// Trae las asignaciones activas y completadas del trabajador, con datos de bitácora
 $stmtAsignaciones = $conexion->prepare(
     "SELECT a.id_asg, a.id_sol, a.estado_asignacion, a.fecha_inicio, a.fecha_fin,
             s.encabezado, s.prioridad, s.id_estado,
-            ar.nombre AS area
+            ar.nombre AS area,
+            b.id_bit, b.evidencia, b.razon_rechazo
      FROM asignacion a
      JOIN solicitud s ON a.id_sol = s.id_sol
      JOIN area ar ON s.id_area = ar.id_area
+     LEFT JOIN bitacora b ON b.id_sol = a.id_sol
+         AND b.id_bit = (SELECT MAX(id_bit) FROM bitacora WHERE id_sol = a.id_sol)
      WHERE a.id_trabajador = ?
        AND a.estado_asignacion != 'cancelada'
      ORDER BY a.estado_asignacion ASC, a.fecha_inicio DESC"
@@ -50,16 +54,29 @@ $totalAsignaciones = $asignaciones->num_rows;
 $stmtAsignaciones->close();
 $listaActivas     = [];
 $listaRevision    = [];
+$listaRechazadas  = [];
 $listaCompletadas = [];
 while ($a = $asignaciones->fetch_object()) {
     if ($a->estado_asignacion === 'activa' && $a->id_estado == 4) {
         $listaRevision[] = $a;
+    } elseif ($a->estado_asignacion === 'activa' && $a->id_estado == 5) {
+        $listaRechazadas[] = $a;
     } elseif ($a->estado_asignacion === 'activa') {
         $listaActivas[] = $a;
     } else {
         $listaCompletadas[] = $a;
     }
 }
+
+$stmtNotifs = $conexion->prepare(
+    "SELECT id_not, mensaje, fecha_envio FROM notificacion
+     WHERE id_us = ? ORDER BY fecha_envio DESC LIMIT 30"
+);
+$stmtNotifs->bind_param("i", $_SESSION["id"]);
+$stmtNotifs->execute();
+$notificaciones = $stmtNotifs->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmtNotifs->close();
+$totalNotifs = count($notificaciones);
 ?>
 
 <!-- HTML -->
@@ -99,25 +116,30 @@ while ($a = $asignaciones->fetch_object()) {
         <nav class="sidebar-nav">
             <div class="nav-etiqueta-seccion">Principal</div>
             <a href="#" class="nav-link nav-item active" data-section="solicitudes">
-                Solicitudes
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                <span class="nav-texto">Solicitudes</span>
                 <?php if ($totalSolicitudes > 0): ?>
                     <span class="nav-contador"><?= $totalSolicitudes ?></span>
                 <?php endif; ?>
             </a>
             <a href="#" class="nav-link nav-item" data-section="mis-asignaciones">
-                Solicitudes Aceptadas
-                <?php $totalActivas = count($listaActivas) + count($listaRevision); ?>
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span class="nav-texto">Solicitudes Aceptadas</span>
+                <?php $totalActivas = count($listaActivas) + count($listaRevision) + count($listaRechazadas); ?>
                 <?php if ($totalActivas > 0): ?>
                     <span class="nav-contador"><?= $totalActivas ?></span>
                 <?php endif; ?>
             </a>
-            <a href="#" class="nav-link nav-item" data-section="reporte">Reporte de Solicitud</a>
-            <a href="#" class="nav-link nav-item" data-section="notificaciones">Notificaciones</a>
+            <a href="#" class="nav-link nav-item" data-section="reporte">
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                <span class="nav-texto">Reporte de Solicitud</span>
+            </a>
         </nav>
 
         <div class="sidebar-pie">
             <a href="php/controlador_cerrar.php" class="btn-cerrar-sesion">
-                <span>❌</span> Cerrar Sesión
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                <span class="nav-texto">Cerrar Sesión</span>
             </a>
         </div>
     </aside>
@@ -125,9 +147,42 @@ while ($a = $asignaciones->fetch_object()) {
     <div class="contenido-principal">
 
         <header class="topbar">
-            <div>
-                <div class="topbar-titulo" id="topbar-titulo">Solicitudes</div>
-                <div class="topbar-subtitulo">Instituto Tecnológico Superior de Rioverde</div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <button class="btn-hamburguesa" onclick="toggleSidebar()" title="Menú">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+                <div>
+                    <div class="topbar-titulo" id="topbar-titulo">Solicitudes</div>
+                    <div class="topbar-subtitulo">Instituto Tecnológico Superior de Rioverde</div>
+                </div>
+            </div>
+            <div class="notif-contenedor">
+                <button class="notif-boton" id="notif-boton" onclick="toggleNotificaciones()" title="Notificaciones">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <?php if ($totalNotifs > 0): ?>
+                        <span class="notif-badge"><?= $totalNotifs ?></span>
+                    <?php endif; ?>
+                </button>
+                <div class="notif-panel" id="notif-panel">
+                    <div class="notif-panel-encabezado">Notificaciones</div>
+                    <div class="notif-lista">
+                        <?php if (empty($notificaciones)): ?>
+                            <div class="notif-vacio">Sin notificaciones nuevas</div>
+                        <?php else: ?>
+                            <?php foreach ($notificaciones as $n): ?>
+                                <div class="notif-item" id="notif-<?= $n['id_not'] ?>">
+                                    <div class="notif-mensaje"><?= htmlspecialchars($n['mensaje']) ?></div>
+                                    <div class="notif-meta">
+                                        <span class="notif-fecha"><?= date('d/m/Y H:i', strtotime($n['fecha_envio'])) ?></span>
+                                        <button class="notif-eliminar" onclick="eliminarNotificacion(<?= $n['id_not'] ?>)" title="Eliminar">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -158,8 +213,8 @@ while ($a = $asignaciones->fetch_object()) {
                                     <?php
                                         $prioridad   = strtolower($s->prioridad);
                                         $solicitante = htmlspecialchars($s->solicitante_nombre . " " . $s->solicitante_app);
-                                        $fecha       = date("d/m/Y", strtotime($s->fecha_creacion));
-                                        $fechalimite = date("d/m/Y", strtotime($s->fecha_limite));
+                                        $fecha       = date("d/m/Y H:i:s", strtotime($s->fecha_creacion));
+                                        $fechalimite = date("d/m/Y H:i:s", strtotime($s->fecha_limite));
                                     ?>
                                     <div class="tarjeta-solicitud solicitud-item" data-id="<?= $s->id_sol ?>">
                                         <div class="barra-prioridad <?= $prioridad ?>"></div>
@@ -208,7 +263,7 @@ while ($a = $asignaciones->fetch_object()) {
                     </div>
                     <div class="tarjeta-cuerpo">
                         <div id="report-form-container">
-                            <p>Selecciona una solicitud aceptada para generar el reporte.</p>
+                            <p class="msj-instruccion">Selecciona una solicitud aceptada para generar el reporte.</p>
                         </div>
                         <div id="report-form">
                             <form id="form-reporte" action="php/controlador_trabajador.php" method="POST"
@@ -216,40 +271,57 @@ while ($a = $asignaciones->fetch_object()) {
                                 <input type="hidden" name="accion" value="reporte">
                                 
                                 <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
-                                    <h3 style="font-size:14px; margin:0;">Generar Reporte para:</h3>
+                                    <h3 style="font-size:13px; margin:0; color:black;">Generar Reporte para:</h3>
                                     <select class="campo-form" id="select-solicitud-reporte" name="id_sol"
                                             style="width:auto; min-width:200px;">
                                         <option value="" disabled selected>— Seleccionar Solicitud —</option>
-                                        <?php foreach ($listaActivas as $a): ?>
-                                            <option value="<?= $a->id_sol ?>">
-                                                <?= htmlspecialchars($a->encabezado) ?>
-                                            </option>
-                                        <?php endforeach; ?>
+                                        <?php if (!empty($listaActivas) && !empty($listaRechazadas)): ?>
+                                            <optgroup label="En proceso">
+                                            <?php foreach ($listaActivas as $a): ?>
+                                                <option value="<?= $a->id_sol ?>"><?= htmlspecialchars($a->encabezado) ?></option>
+                                            <?php endforeach; ?>
+                                            </optgroup>
+                                            <optgroup label="Reenviar reporte">
+                                            <?php foreach ($listaRechazadas as $a): ?>
+                                                <option value="<?= $a->id_sol ?>"><?= htmlspecialchars($a->encabezado) ?></option>
+                                            <?php endforeach; ?>
+                                            </optgroup>
+                                        <?php else: ?>
+                                            <?php foreach ($listaActivas as $a): ?>
+                                                <option value="<?= $a->id_sol ?>"><?= htmlspecialchars($a->encabezado) ?></option>
+                                            <?php endforeach; ?>
+                                            <?php foreach ($listaRechazadas as $a): ?>
+                                                <option value="<?= $a->id_sol ?>"><?= htmlspecialchars($a->encabezado) ?></option>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
                                     </select>
                                 </div>
 
                                 <div class="grupo-form">
-                                    <label class="etiqueta-form" for="titulo-reporte">Título del reporte</label>
+                                    <label class="etiqueta-form" for="titulo-reporte">Título del reporte <small class="contador-chars"></small></label>
                                     <input class="campo-form" type="text" id="titulo-reporte"
-                                        name="encabezado" placeholder="Ingresa el título de tu reporte" required>
+                                        name="encabezado" placeholder="Ingresa el título de tu reporte"
+                                        maxlength="50" required>
                                 </div>
 
                                 <div class="grupo-form">
-                                    <label class="etiqueta-form" for="desc-problema">Descripción del problema</label>
+                                    <label class="etiqueta-form" for="desc-problema">Descripción del problema <small class="contador-chars"></small></label>
                                     <textarea class="campo-form" id="desc-problema" name="descripcion_problema"
-                                            rows="4" placeholder="Describe el problema detalladamente" required></textarea>
+                                            rows="4" placeholder="Describe el problema detalladamente"
+                                            maxlength="120" required></textarea>
                                 </div>
 
                                 <div class="grupo-form">
-                                    <label class="etiqueta-form" for="desc-solucion">Solución</label>
+                                    <label class="etiqueta-form" for="desc-solucion">Solución <small class="contador-chars"></small></label>
                                     <textarea class="campo-form" id="desc-solucion" name="descripcion_solucion"
-                                            rows="4" placeholder="Describe la solución detalladamente" required></textarea>
+                                            rows="4" placeholder="Describe la solución detalladamente"
+                                            maxlength="120" required></textarea>
                                 </div>
 
                                 <div class="grupo-form">
-                                    <label class="etiqueta-form" for="fotos">Subir fotografías (evidencia)</label>
+                                    <label class="etiqueta-form" for="fotos">Fotografías de Evidencia   (Mín. 1, Máx. 3) [jpg, png, webp]</label>
                                     <input class="campo-form" type="file" id="fotos" name="fotos[]"
-                                        multiple accept="image/*">
+                                        multiple accept="image/jpeg,image/png,image/webp" required>
                                 </div>
 
                                 <button type="submit" class="btn btn-primario">Guardar Reporte</button>
@@ -259,18 +331,6 @@ while ($a = $asignaciones->fetch_object()) {
                 </div>
             </div>
 
-            <!-- NOTIFICACIONES -->
-            <div id="notificaciones" class="section" style="display:none;">
-                <div class="tarjeta" style="max-width:600px;">
-                    <div class="tarjeta-encabezado">
-                        <div class="tarjeta-titulo">Notificaciones</div>
-                    </div>
-                    <div class="tarjeta-cuerpo">
-                        <p>Aquí aparecerán las notificaciones</p>
-                    </div>
-                </div>
-            </div>
-            
             <!-- SOLICITUDES ACEPTADAS -->
             <div id="mis-asignaciones" class="section" style="display:none;">
                 <div class="tarjeta">
@@ -327,9 +387,9 @@ while ($a = $asignaciones->fetch_object()) {
                                                     ?>
                                                     <span class="etiqueta <?= $clasePrioridad ?>"><?= htmlspecialchars($a->prioridad) ?></span>
                                                 </td>
-                                                <td class="texto-apagado"><?= date("d/m/Y", strtotime($a->fecha_inicio)) ?></td>
+                                                <td class="texto-apagado"><?= date("d/m/Y H:i:s", strtotime($a->fecha_inicio)) ?></td>
                                                 <td class="texto-apagado">
-                                                    <?= $a->fecha_fin ? date("d/m/Y", strtotime($a->fecha_fin)) : '—' ?>
+                                                    <?= $a->fecha_fin ? date("d/m/Y H:i:s", strtotime($a->fecha_fin)) : '—' ?>
                                                 </td>
                                                 <td><span class="etiqueta etiqueta-proceso">Activa</span></td>
                                             </tr>
@@ -348,14 +408,15 @@ while ($a = $asignaciones->fetch_object()) {
                             </div>
                             <div class="contenedor-tabla">
                                 <table style="table-layout:fixed; width:100%">
-                                        <colgroup>
-                                            <col style="width:30%">
-                                            <col style="width:15%">
-                                            <col style="width:12%">
-                                            <col style="width:13%">
-                                            <col style="width:13%">
-                                            <col style="width:17%">
-                                        </colgroup>
+                                    <colgroup>
+                                        <col style="width:25%">
+                                        <col style="width:13%">
+                                        <col style="width:11%">
+                                        <col style="width:12%">
+                                        <col style="width:12%">
+                                        <col style="width:14%">
+                                        <col style="width:13%">
+                                    </colgroup>
                                     <thead>
                                         <tr>
                                             <th>Título</th>
@@ -364,29 +425,98 @@ while ($a = $asignaciones->fetch_object()) {
                                             <th>Fecha Inicio</th>
                                             <th>Fecha Fin</th>
                                             <th>Estado</th>
+                                            <th>Reporte</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <?php foreach ($listaRevision as $a): ?>
+                                            <?php
+                                                $clasePrioridad = match(strtolower($a->prioridad)) {
+                                                    'alta'  => 'etiqueta-alta',
+                                                    'media' => 'etiqueta-media',
+                                                    'baja'  => 'etiqueta-baja',
+                                                    default => ''
+                                                };
+                                                $pdfPath = null;
+                                                if ($a->evidencia) {
+                                                    $carpeta = dirname(explode(',', $a->evidencia)[0]);
+                                                    $pdfPath = $carpeta . '/reporte_' . $a->id_bit . '.pdf';
+                                                }
+                                            ?>
                                             <tr>
                                                 <td><strong><?= htmlspecialchars($a->encabezado) ?></strong></td>
                                                 <td class="texto-apagado"><?= htmlspecialchars($a->area) ?></td>
-                                                <td>
-                                                    <?php
-                                                        $clasePrioridad = match(strtolower($a->prioridad)) {
-                                                            'alta'  => 'etiqueta-alta',
-                                                            'media' => 'etiqueta-media',
-                                                            'baja'  => 'etiqueta-baja',
-                                                            default => ''
-                                                        };
-                                                    ?>
-                                                    <span class="etiqueta <?= $clasePrioridad ?>"><?= htmlspecialchars($a->prioridad) ?></span>
-                                                </td>
-                                                <td class="texto-apagado"><?= date("d/m/Y", strtotime($a->fecha_inicio)) ?></td>
-                                                <td class="texto-apagado">
-                                                    <?= $a->fecha_fin ? date("d/m/Y", strtotime($a->fecha_fin)) : '—' ?>
-                                                </td>
+                                                <td><span class="etiqueta <?= $clasePrioridad ?>"><?= htmlspecialchars($a->prioridad) ?></span></td>
+                                                <td class="texto-apagado"><?= date("d/m/Y H:i:s", strtotime($a->fecha_inicio)) ?></td>
+                                                <td class="texto-apagado"><?= $a->fecha_fin ? date("d/m/Y H:i:s", strtotime($a->fecha_fin)) : '—' ?></td>
                                                 <td><span class="etiqueta etiqueta-pendiente">En Revisión</span></td>
+                                                <td>
+                                                    <?php if ($pdfPath): ?>
+                                                        <a href="<?= htmlspecialchars($pdfPath) ?>" target="_blank"
+                                                           class="btn btn-fantasma btn-pequeno">Ver PDF</a>
+                                                    <?php else: ?>
+                                                        <span class="texto-apagado">—</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- REPORTE RECHAZADO -->
+                        <?php if (!empty($listaRechazadas)): ?>
+                            <div style="padding: 12px 16px 4px; margin-top: 8px;">
+                                <p style="font-size:11px; font-weight:700; color:#c0392b; text-transform:uppercase; letter-spacing:1px;">
+                                    Reporte Rechazado — Reenviar
+                                </p>
+                            </div>
+                            <div class="contenedor-tabla">
+                                <table style="table-layout:fixed; width:100%">
+                                    <colgroup>
+                                        <col style="width:22%">
+                                        <col style="width:12%">
+                                        <col style="width:10%">
+                                        <col style="width:12%">
+                                        <col style="width:12%">
+                                        <col style="width:32%">
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            <th>Título</th>
+                                            <th>Área</th>
+                                            <th>Prioridad</th>
+                                            <th>Fecha Inicio</th>
+                                            <th>Fecha Fin</th>
+                                            <th>Motivo del Rechazo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($listaRechazadas as $a): ?>
+                                            <?php
+                                                $clasePrioridad = match(strtolower($a->prioridad)) {
+                                                    'alta'  => 'etiqueta-alta',
+                                                    'media' => 'etiqueta-media',
+                                                    'baja'  => 'etiqueta-baja',
+                                                    default => ''
+                                                };
+                                            ?>
+                                            <tr>
+                                                <td><strong><?= htmlspecialchars($a->encabezado) ?></strong></td>
+                                                <td class="texto-apagado"><?= htmlspecialchars($a->area) ?></td>
+                                                <td><span class="etiqueta <?= $clasePrioridad ?>"><?= htmlspecialchars($a->prioridad) ?></span></td>
+                                                <td class="texto-apagado"><?= date("d/m/Y H:i:s", strtotime($a->fecha_inicio)) ?></td>
+                                                <td class="texto-apagado"><?= $a->fecha_fin ? date("d/m/Y H:i:s", strtotime($a->fecha_fin)) : '—' ?></td>
+                                                <td>
+                                                    <p style="font-size:12px; color:#c0392b; margin:0 0 6px;">
+                                                        <?= htmlspecialchars($a->razon_rechazo ?? '') ?>
+                                                    </p>
+                                                    <button class="btn btn-advertencia btn-pequeno"
+                                                            onclick="irAReporte(<?= $a->id_sol ?>)">
+                                                        Reenviar Reporte
+                                                    </button>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     </tbody>
@@ -437,9 +567,9 @@ while ($a = $asignaciones->fetch_object()) {
                                                     ?>
                                                     <span class="etiqueta <?= $clasePrioridad ?>"><?= htmlspecialchars($a->prioridad) ?></span>
                                                 </td>
-                                                <td class="texto-apagado"><?= date("d/m/Y", strtotime($a->fecha_inicio)) ?></td>
+                                                <td class="texto-apagado"><?= date("d/m/Y H:i:s", strtotime($a->fecha_inicio)) ?></td>
                                                 <td class="texto-apagado">
-                                                    <?= $a->fecha_fin ? date("d/m/Y", strtotime($a->fecha_fin)) : '—' ?>
+                                                    <?= $a->fecha_fin ? date("d/m/Y H:i:s", strtotime($a->fecha_fin)) : '—' ?>
                                                 </td>
                                                 <td><span class="etiqueta etiqueta-completada">Completada</span></td>
                                             </tr>
@@ -456,6 +586,13 @@ while ($a = $asignaciones->fetch_object()) {
 
     <script src="js/comun.js"></script>
     <script src="js/trabajador.js"></script>
+    <script>inicializarContadores();</script>
+
+    <?php if ($seccionActiva): ?>
+    <script>
+        navegarSeccion("<?= htmlspecialchars($seccionActiva) ?>", titulosPagina);
+    </script>
+    <?php endif; ?>
 
     <!-- Modal de prioridad al aceptar solicitud -->
     <div id="modalPrioridad" class="fondo-modal">

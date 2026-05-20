@@ -97,3 +97,10 @@ if (selectReporte) {
     if (selectReporte && selectReporte.value) {
         document.getElementById('input-id-sol-reporte').value = selectReporte.value;
     }
+
+// Navega a la sección de reporte y pre-selecciona la solicitud rechazada
+function irAReporte(id) {
+    navegarSeccion('reporte', titulosPagina);
+    var select = document.getElementById('select-solicitud-reporte');
+    if (select) select.value = id;
+}

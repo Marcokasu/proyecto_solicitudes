@@ -15,14 +15,16 @@ unset($_SESSION["exito"], $_SESSION["error"]);
 require_once "php/conexion.php";
 
 $stmtSolicitudes = $conexion->prepare(
-    "SELECT s.id_sol, s.encabezado, s.prioridad, s.fecha_creacion, s.fecha_limite,
+    "SELECT s.id_sol, s.encabezado, s.prioridad, s.fecha_creacion, s.fecha_limite, s.id_estado,
             e.nombre AS estado, ar.nombre AS area,
-            a.fecha_fin AS fecha_fin_asignacion
+            a.fecha_fin AS fecha_fin_asignacion,
+            b.id_bit, b.evidencia
      FROM solicitud s
      JOIN estado_solicitud e ON s.id_estado = e.id_estado
      JOIN area ar ON s.id_area = ar.id_area
-     LEFT JOIN asignacion a ON a.id_sol = s.id_sol
-                            AND a.estado_asignacion = 'activa'
+     LEFT JOIN asignacion a ON a.id_sol = s.id_sol AND a.estado_asignacion = 'activa'
+     LEFT JOIN bitacora b ON b.id_sol = s.id_sol
+         AND b.id_bit = (SELECT MAX(id_bit) FROM bitacora WHERE id_sol = s.id_sol)
      WHERE s.id_us = ?
      ORDER BY s.fecha_creacion DESC"
 );
@@ -58,6 +60,16 @@ $stmtAsignaciones->execute();
 $asignaciones = $stmtAsignaciones->get_result();
 $totalAsignaciones = $asignaciones->num_rows;
 $stmtAsignaciones->close();
+
+$stmtNotifs = $conexion->prepare(
+    "SELECT id_not, mensaje, fecha_envio FROM notificacion
+     WHERE id_us = ? ORDER BY fecha_envio DESC LIMIT 30"
+);
+$stmtNotifs->bind_param("i", $_SESSION["id"]);
+$stmtNotifs->execute();
+$notificaciones = $stmtNotifs->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmtNotifs->close();
+$totalNotifs = count($notificaciones);
 ?>
 
 <!-- HTML -->
@@ -96,19 +108,23 @@ $stmtAsignaciones->close();
 
         <nav class="sidebar-nav">
             <div class="nav-etiqueta-seccion">Solicitudes</div>
-            <a href="#" class="nav-link nav-item active" data-section="crear">Nueva Solicitud</a>
+            <a href="#" class="nav-link nav-item active" data-section="crear">
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span class="nav-texto">Nueva Solicitud</span>
+            </a>
             <a href="#" class="nav-link nav-item" data-section="creadas">
-                Mis Solicitudes
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                <span class="nav-texto">Mis Solicitudes</span>
                 <?php if (count($listaActivas) > 0): ?>
                     <span class="nav-contador"><?= count($listaActivas) ?></span>
                 <?php endif; ?>
             </a>
-            <a href="#" class="nav-link nav-item" data-section="notificaciones">Notificaciones</a>
         </nav>
 
         <div class="sidebar-pie">
             <a href="php/controlador_cerrar.php" class="btn-cerrar-sesion">
-                <span>❌</span> Cerrar Sesión
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                <span class="nav-texto">Cerrar Sesión</span>
             </a>
         </div>
     </aside>
@@ -116,9 +132,42 @@ $stmtAsignaciones->close();
     <div class="contenido-principal">
 
         <header class="topbar">
-            <div>
-                <div class="topbar-titulo" id="topbar-titulo">Nueva Solicitud</div>
-                <div class="topbar-subtitulo">Instituto Tecnológico Superior de Rioverde</div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <button class="btn-hamburguesa" onclick="toggleSidebar()" title="Menú">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+                <div>
+                    <div class="topbar-titulo" id="topbar-titulo">Nueva Solicitud</div>
+                    <div class="topbar-subtitulo">Instituto Tecnológico Superior de Rioverde</div>
+                </div>
+            </div>
+            <div class="notif-contenedor">
+                <button class="notif-boton" id="notif-boton" onclick="toggleNotificaciones()" title="Notificaciones">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <?php if ($totalNotifs > 0): ?>
+                        <span class="notif-badge"><?= $totalNotifs ?></span>
+                    <?php endif; ?>
+                </button>
+                <div class="notif-panel" id="notif-panel">
+                    <div class="notif-panel-encabezado">Notificaciones</div>
+                    <div class="notif-lista">
+                        <?php if (empty($notificaciones)): ?>
+                            <div class="notif-vacio">Sin notificaciones nuevas</div>
+                        <?php else: ?>
+                            <?php foreach ($notificaciones as $n): ?>
+                                <div class="notif-item" id="notif-<?= $n['id_not'] ?>">
+                                    <div class="notif-mensaje"><?= htmlspecialchars($n['mensaje']) ?></div>
+                                    <div class="notif-meta">
+                                        <span class="notif-fecha"><?= date('d/m/Y H:i', strtotime($n['fecha_envio'])) ?></span>
+                                        <button class="notif-eliminar" onclick="eliminarNotificacion(<?= $n['id_not'] ?>)" title="Eliminar">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -141,9 +190,9 @@ $stmtAsignaciones->close();
                         <form action="php/controlador_solicitud.php" method="POST">
 
                             <div class="grupo-form">
-                                <label class="etiqueta-form" for="titulo">Título de la solicitud</label>
+                                <label class="etiqueta-form" for="titulo">Título de la solicitud <small class="contador-chars"></small></label>
                                 <input class="campo-form" type="text" id="titulo" name="titulo"
-                                    placeholder="Ej: Equipo sin acceso a red" required>
+                                    placeholder="Ej: Equipo sin acceso a red" maxlength="50" required>
                             </div>
 
                             <!--  red (grid) con dos columnas. Una  para Área y otra para Prioridad -->
@@ -187,9 +236,10 @@ $stmtAsignaciones->close();
                             </div>
 
                             <div class="grupo-form">
-                                <label class="etiqueta-form" for="descripcion">Descripción detallada</label>
+                                <label class="etiqueta-form" for="descripcion">Descripción detallada <small class="contador-chars"></small></label>
                                 <textarea class="campo-form" id="descripcion" name="descripcion"
-                                        rows="5" placeholder="Describe el problema con el mayor detalle posible" required></textarea>
+                                        rows="5" placeholder="Describe el problema con el mayor detalle posible"
+                                        maxlength="120" required></textarea>
                             </div>
 
                             <button type="submit" class="btn btn-primario w-full"
@@ -259,20 +309,27 @@ $stmtAsignaciones->close();
                                                     'baja'  => 'etiqueta-baja',
                                                     default => ''
                                                 };
-                                                $claseEstado = match(strtolower($s->estado)) {
-                                                    'pendiente'  => 'etiqueta-pendiente',
-                                                    'en proceso' => 'etiqueta-proceso',
-                                                    default      => ''
+                                                $claseEstado = match($s->id_estado) {
+                                                    1 => 'etiqueta-pendiente',
+                                                    2 => 'etiqueta-proceso',
+                                                    4 => 'etiqueta-pendiente',
+                                                    5 => 'etiqueta-cancelada',
+                                                    default => ''
                                                 };
-                                                $puntoEstado = match(strtolower($s->estado)) {
-                                                    'pendiente'  => 'pendiente',
-                                                    'en proceso' => 'proceso',
-                                                    default      => ''
+                                                $puntoEstado = match($s->id_estado) {
+                                                    1 => 'pendiente',
+                                                    2 => 'proceso',
+                                                    default => ''
                                                 };
-                                                $fecha = date("d/m/Y", strtotime($s->fecha_creacion));
+                                                $fecha = date("d/m/Y H:i:s", strtotime($s->fecha_creacion));
                                                 $fechalimite = $s->fecha_fin_asignacion
-                                                    ? date("d/m/Y", strtotime($s->fecha_fin_asignacion))
-                                                    : date("d/m/Y", strtotime($s->fecha_limite));
+                                                    ? date("d/m/Y H:i:s", strtotime($s->fecha_fin_asignacion))
+                                                    : date("d/m/Y H:i:s", strtotime($s->fecha_limite));
+                                                $pdfPath = null;
+                                                if ($s->id_estado == 4 && $s->evidencia) {
+                                                    $carpeta = dirname(explode(',', $s->evidencia)[0]);
+                                                    $pdfPath = $carpeta . '/reporte_' . $s->id_bit . '.pdf';
+                                                }
                                             ?>
                                             <tr>
                                                 <td><span class="texto-apagado texto-xs">#<?= $s->id_sol ?></span></td>
@@ -288,12 +345,22 @@ $stmtAsignaciones->close();
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <?php if (strtolower($s->estado) === 'en revisión'): ?>
-                                                        <form action="php/controlador_solicitud.php" method="POST">
-                                                            <input type="hidden" name="accion" value="aprobar">
-                                                            <input type="hidden" name="id_sol" value="<?= $s->id_sol ?>">
-                                                            <button type="submit" class="btn btn-exito btn-pequeno">Aprobar</button>
-                                                        </form>
+                                                    <?php if ($s->id_estado == 4): ?>
+                                                        <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+                                                            <?php if ($pdfPath): ?>
+                                                                <a href="<?= htmlspecialchars($pdfPath) ?>" target="_blank"
+                                                                   class="btn btn-fantasma btn-pequeno">Ver PDF</a>
+                                                            <?php endif; ?>
+                                                            <form action="php/controlador_solicitud.php" method="POST" style="margin:0;">
+                                                                <input type="hidden" name="accion" value="aprobar">
+                                                                <input type="hidden" name="id_sol" value="<?= $s->id_sol ?>">
+                                                                <button type="submit" class="btn btn-exito btn-pequeno">Aprobar</button>
+                                                            </form>
+                                                            <button class="btn btn-peligro btn-pequeno"
+                                                                    onclick="abrirModalRechazo(<?= $s->id_sol ?>)">Rechazar</button>
+                                                        </div>
+                                                    <?php elseif ($s->id_estado == 5): ?>
+                                                        <span class="texto-apagado texto-xs">Esperando reenvío...</span>
                                                     <?php else: ?>
                                                         <span class="texto-apagado texto-xs">—</span>
                                                     <?php endif; ?>
@@ -345,10 +412,10 @@ $stmtAsignaciones->close();
                                                     'baja'  => 'etiqueta-baja',
                                                     default => ''
                                                 };
-                                                $fecha = date("d/m/Y", strtotime($s->fecha_creacion));
+                                                $fecha = date("d/m/Y H:i:s", strtotime($s->fecha_creacion));
                                                 $fechalimite = $s->fecha_fin_asignacion
-                                                    ? date("d/m/Y", strtotime($s->fecha_fin_asignacion))
-                                                    : date("d/m/Y", strtotime($s->fecha_limite));
+                                                    ? date("d/m/Y H:i:s", strtotime($s->fecha_fin_asignacion))
+                                                    : date("d/m/Y H:i:s", strtotime($s->fecha_limite));
                                             ?>
                                             <tr>
                                                 <td><span class="texto-apagado texto-xs">#<?= $s->id_sol ?></span></td>
@@ -375,22 +442,53 @@ $stmtAsignaciones->close();
                 </div>
             </div>
 
-            <!-- NOTIFICACIONES -->
-            <div id="notificaciones" class="section" style="display:none;">
-                <div class="tarjeta" style="max-width:600px;">
-                    <div class="tarjeta-encabezado">
-                        <div class="tarjeta-titulo">Notificaciones</div>
-                    </div>
-                    <div class="tarjeta-cuerpo">
-                        <p>Aquí aparecerán las notificaciones</p>
-                    </div>
-                </div>
-            </div>
 
+
+        </div>
+    </div>
+
+    <!-- MODAL: RECHAZAR REPORTE -->
+    <div id="modalRechazo" class="fondo-modal">
+        <div class="modal" style="max-width:440px;">
+            <div class="modal-encabezado">
+                <div class="modal-titulo">Rechazar Reporte</div>
+                <button class="modal-cerrar" onclick="cerrarModalRechazo()">✕</button>
+            </div>
+            <div class="modal-divisor"></div>
+            <p style="font-size:13px; color:#4d5a7a; margin-bottom:16px;">
+                Indica el motivo del rechazo. El trabajador recibirá esta razón y deberá enviar un nuevo reporte.
+            </p>
+            <form id="formRechazo" method="POST" action="php/controlador_solicitud.php">
+                <input type="hidden" name="accion" value="rechazar">
+                <input type="hidden" name="id_sol" id="rechazo-id-sol">
+                <div class="grupo-form">
+                    <label class="etiqueta-form" for="razon-rechazo">Motivo del rechazo</label>
+                    <textarea class="campo-form" id="razon-rechazo" name="razon" rows="4"
+                        placeholder="Describe por qué rechazas este reporte..." required></textarea>
+                </div>
+                <div class="modal-pie">
+                    <button type="submit" class="btn btn-peligro">Confirmar Rechazo</button>
+                    <button type="button" class="btn btn-fantasma" onclick="cerrarModalRechazo()">Cancelar</button>
+                </div>
+            </form>
         </div>
     </div>
 
     <script src="js/comun.js"></script>
     <script src="js/usuarios.js"></script>
+    <script>inicializarContadores();</script>
+    <script>
+        function abrirModalRechazo(idSol) {
+            document.getElementById('rechazo-id-sol').value = idSol;
+            document.getElementById('modalRechazo').classList.add('abierto');
+        }
+        function cerrarModalRechazo() {
+            document.getElementById('modalRechazo').classList.remove('abierto');
+            document.getElementById('razon-rechazo').value = '';
+        }
+        document.getElementById('modalRechazo').addEventListener('click', function(e) {
+            if (e.target === this) cerrarModalRechazo();
+        });
+    </script>
 </body>
 </html>

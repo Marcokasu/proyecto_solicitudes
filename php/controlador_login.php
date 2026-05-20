@@ -1,15 +1,15 @@
 <?php
 session_start();
 if (!empty($_POST["btn-iniciar-sesion"])) {
-    if (!empty($_POST["username"]) and !empty($_POST["password"])) {
-        
+    if (!empty($_POST["correo"]) and !empty($_POST["password"])) {
+
         // Definición de variables con consulta a la BD
-        $usuario = trim($_POST["username"]);
+        $correo   = trim($_POST["correo"]);
         $password = trim($_POST["password"]);
 
         // Consulta con sentencia pre-hecha
-        $statement = $conexion->prepare("SELECT id_us, nombre, app, contrasena, id_rol FROM usuario WHERE username= ?");
-        $statement->bind_param("s", $usuario);
+        $statement = $conexion->prepare("SELECT id_us, nombre, app, contrasena, id_rol, correo FROM usuario WHERE correo = ?");
+        $statement->bind_param("s", $correo);
         $statement->execute();
         $resultado = $statement->get_result();
 
@@ -19,10 +19,11 @@ if (!empty($_POST["btn-iniciar-sesion"])) {
             if (password_verify($password, $datos->contrasena)) {
                 session_regenerate_id(true);
 
-                $_SESSION["id"]        =$datos->id_us;
-                $_SESSION["nombre"]    =$datos->nombre;
-                $_SESSION["app"]       =$datos->app;
-                $_SESSION["id_rol"]    =$datos->id_rol;
+                $_SESSION["id"]        = $datos->id_us;
+                $_SESSION["nombre"]    = $datos->nombre;
+                $_SESSION["app"]       = $datos->app;
+                $_SESSION["id_rol"]    = $datos->id_rol;
+                $_SESSION["correo"]    = $datos->correo;
 
                 // Redirección dependiendo del rol del usuario
                 switch ((int)$datos->id_rol) {
@@ -46,7 +47,7 @@ if (!empty($_POST["btn-iniciar-sesion"])) {
                 echo "<div class='alerta alerta-error'>Usuario o contraseña incorrectos</div>";
             }
         } else {
-            echo "<div class='alerta alerta-error'>Usuario o contraseña incorrectos</div>";
+            echo "<div class='alerta alerta-error'>Correo o contraseña incorrectos</div>";
         }
 
         $statement->close();

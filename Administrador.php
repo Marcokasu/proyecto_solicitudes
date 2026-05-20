@@ -16,7 +16,7 @@ unset($_SESSION["exito"], $_SESSION["error"], $_SESSION["seccion_activa"]);
 require_once "php/conexion.php";
 
 $stmtUsuarios = $conexion->prepare(
-    "SELECT u.id_us, u.nombre, u.app, u.apm, u.username, u.contrasena, u.disponible,
+    "SELECT u.id_us, u.nombre, u.app, u.apm, u.correo, u.contrasena, u.disponible,
         u.id_rol, r.nombre AS rol
     FROM usuario u
     JOIN rol r ON u.id_rol = r.id_rol
@@ -27,6 +27,36 @@ $stmtUsuarios->bind_param("i", $_SESSION["id"]);
 $stmtUsuarios->execute();
 $usuarios = $stmtUsuarios->get_result();
 $stmtUsuarios->close();
+
+// Bitácora: todas las solicitudes con info de asignación y reporte
+$stmtBitacora = $conexion->prepare(
+    "SELECT
+        s.id_sol, s.encabezado AS sol_encabezado, s.prioridad, s.fecha_creacion,
+        e.nombre AS estado,
+        ar.nombre AS area, ar.id_area,
+        CONCAT(us.nombre, ' ', us.app) AS solicitante,
+        IFNULL(CONCAT(uw.nombre, ' ', uw.app), '—') AS trabajador,
+        b.id_bit, b.evidencia
+     FROM solicitud s
+     JOIN estado_solicitud e ON s.id_estado = e.id_estado
+     JOIN area ar ON s.id_area = ar.id_area
+     JOIN usuario us ON us.id_us = s.id_us
+     LEFT JOIN asignacion a ON a.id_sol = s.id_sol
+         AND a.estado_asignacion IN ('activa', 'completada')
+     LEFT JOIN usuario uw ON uw.id_us = a.id_trabajador
+     LEFT JOIN bitacora b ON b.id_bit = (
+         SELECT MAX(id_bit) FROM bitacora WHERE id_sol = s.id_sol
+     )
+     ORDER BY s.fecha_creacion DESC"
+);
+$stmtBitacora->execute();
+$registrosBitacora = $stmtBitacora->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmtBitacora->close();
+
+$stmtAreas   = $conexion->query("SELECT id_area, nombre FROM area ORDER BY nombre ASC");
+$areas       = $stmtAreas->fetch_all(MYSQLI_ASSOC);
+$stmtEstados = $conexion->query("SELECT id_estado, nombre FROM estado_solicitud ORDER BY id_estado ASC");
+$estadosFiltro = $stmtEstados->fetch_all(MYSQLI_ASSOC);
 ?>
 
 <!-- HTML -->
@@ -61,29 +91,46 @@ $stmtUsuarios->close();
             </div>
         </div>
 
-        <!-- La sección de los datos: Redirige a la sección correspondiente -->
         <nav class="sidebar-nav">
-            <div class="nav-etiqueta-seccion">Panel</div>
-            <a href="#" class="nav-link nav-item active" data-section="bitacora">Bitácora</a>
-            <a href="#" class="nav-link nav-item" data-section="generar-reporte">Generar Reporte</a>
-            <a href="#" class="nav-link nav-item" data-section="admin-usuarios">Administrar Usuarios</a>
+            <div class="nav-etiqueta-seccion">Bitácora</div>
+            <a href="#" class="nav-link nav-item active" data-section="bitacora">
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                <span class="nav-texto">Bitácora</span>
+            </a>
+            <a href="#" class="nav-link nav-item" data-section="generar-reporte">
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span class="nav-texto">Generar Reporte</span>
+            </a>
+            <div class="nav-etiqueta-seccion">Administración</div>
+            <a href="#" class="nav-link nav-item" data-section="admin-usuarios">
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                <span class="nav-texto">Administrar Usuarios</span>
+            </a>
+            <a href="#" class="nav-link nav-item" data-section="admin-areas">
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                <span class="nav-texto">Administrar Áreas</span>
+            </a>
         </nav>
 
-        <!-- El controlador PHP destruye la sesión antes de redirigir -->
         <div class="sidebar-pie">
             <a href="php/controlador_cerrar.php" class="btn-cerrar-sesion">
-                <span>❌</span> Cerrar Sesión
+                <svg class="nav-icono" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                <span class="nav-texto">Cerrar Sesión</span>
             </a>
         </div>
     </aside>
 
     <div class="contenido-principal">
 
-        <!-- El topbar se actualiza al navegar entre secciones -->
         <header class="topbar">
-            <div>
-                <div class="topbar-titulo" id="topbar-titulo">Bitácora</div>
-                <div class="topbar-subtitulo">Instituto Tecnológico Superior de Rioverde</div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <button class="btn-hamburguesa" onclick="toggleSidebar()" title="Menú">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+                <div>
+                    <div class="topbar-titulo" id="topbar-titulo">Bitácora</div>
+                    <div class="topbar-subtitulo">Instituto Tecnológico Superior de Rioverde</div>
+                </div>
             </div>
         </header>
 
@@ -102,100 +149,171 @@ $stmtUsuarios->close();
                 <div class="tarjeta">
                     <div class="tarjeta-encabezado">
                         <div class="tarjeta-titulo">Bitácora de solicitudes</div>
+                        <span class="texto-apagado" style="font-size:13px;"><?= count($registrosBitacora) ?> registro(s)</span>
                     </div>
                     <div class="barra-herramientas">
                         <div class="campo-busqueda">
-                            <input class="campo-form" type="text" placeholder="Buscar en bitácora...">
+                            <input class="campo-form" type="text" id="buscar-bitacora"
+                                   placeholder="Buscar por solicitud, solicitante o técnico...">
                         </div>
-                        <select class="campo-form" style="width:auto; min-width:140px;">
+                        <select class="campo-form" id="filtro-estado-bitacora" style="width:auto; min-width:150px;">
                             <option value="">Todos los estados</option>
-                            <option>Pendiente</option>
-                            <option>En proceso</option>
-                            <option>Completada</option>
+                            <?php foreach ($estadosFiltro as $est): ?>
+                                <option value="<?= htmlspecialchars($est['nombre']) ?>">
+                                    <?= htmlspecialchars($est['nombre']) ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
-                        <select class="campo-form" style="width:auto; min-width:140px;">
+                        <select class="campo-form" id="filtro-area-bitacora" style="width:auto; min-width:150px;">
                             <option value="">Todas las áreas</option>
-                            <option>Docencia</option>
-                            <option>Coordinación Académica</option>
-                            <option>Servicios Escolares</option>
-                            <option>Recursos Humanos</option>
+                            <?php foreach ($areas as $a): ?>
+                                <option value="<?= $a['id_area'] ?>">
+                                    <?= htmlspecialchars($a['nombre']) ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
-                    <!-- loop PHP y datos de la BD. (NOTA: Datos de ejemplo)-->
                     <div class="contenedor-tabla">
                         <table>
                             <thead>
                                 <tr>
+                                    <th>Solicitud</th>
                                     <th>Solicitante</th>
-                                    <th>Trabajador Asignado</th>
-                                    <th>Estado</th>
+                                    <th>Técnico</th>
+                                    <th>Estado / Prioridad</th>
                                     <th>Fecha</th>
-                                    <th>Detalles Resumidos</th>
+                                    <th>Reporte</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="tabla-bitacora">
+                            <?php if (empty($registrosBitacora)): ?>
                                 <tr>
-                                    <td>Juan Pérez</td>
-                                    <td>Carlos López</td>
-                                    <td><span class="etiqueta etiqueta-completada">Finalizada</span></td>
-                                    <td class="texto-apagado">2023-10-01</td>
-                                    <td>Solicitud de soporte técnico resuelta.</td>
+                                    <td colspan="6" style="text-align:center; color:#8f98b2;">
+                                        No hay solicitudes registradas.
+                                    </td>
                                 </tr>
-                                <tr>
-                                    <td>María García</td>
-                                    <td>Ana Rodríguez</td>
-                                    <td><span class="etiqueta etiqueta-proceso">En curso</span></td>
-                                    <td class="texto-apagado">2023-09-28</td>
-                                    <td>Actualización de software en proceso.</td>
+                            <?php else: ?>
+                                <?php foreach ($registrosBitacora as $r):
+                                    $claseEstado = match($r['estado']) {
+                                        'Pendiente'          => 'etiqueta-pendiente',
+                                        'En Proceso'         => 'etiqueta-proceso',
+                                        'En Revisión'        => 'etiqueta-pendiente',
+                                        'Finalizada'         => 'etiqueta-completada',
+                                        'Reporte Rechazado'  => 'etiqueta-cancelada',
+                                        default              => ''
+                                    };
+                                    $clasePrioridad = match(strtolower($r['prioridad'])) {
+                                        'alta'  => 'etiqueta-alta',
+                                        'media' => 'etiqueta-media',
+                                        'baja'  => 'etiqueta-baja',
+                                        default => ''
+                                    };
+                                    $pdfUrl = null;
+                                    if ($r['id_bit'] && $r['evidencia']) {
+                                        $primera = explode(',', $r['evidencia'])[0];
+                                        $pdfUrl  = dirname(trim($primera)) . '/reporte_' . $r['id_bit'] . '.pdf';
+                                    }
+                                    $textoBusqueda = strtolower(
+                                        $r['sol_encabezado'] . ' ' .
+                                        $r['solicitante']    . ' ' .
+                                        $r['trabajador']     . ' ' .
+                                        $r['area']
+                                    );
+                                ?>
+                                <tr data-estado="<?= htmlspecialchars($r['estado']) ?>"
+                                    data-area="<?= $r['id_area'] ?>"
+                                    data-texto="<?= htmlspecialchars($textoBusqueda) ?>">
+                                    <td>
+                                        <div style="font-weight:600; color:#1a2340;">
+                                            <?= htmlspecialchars($r['sol_encabezado']) ?>
+                                        </div>
+                                        <div class="texto-apagado" style="font-size:11px;">
+                                            <?= htmlspecialchars($r['area']) ?>
+                                        </div>
+                                    </td>
+                                    <td><?= htmlspecialchars($r['solicitante']) ?></td>
+                                    <td class="texto-apagado"><?= htmlspecialchars($r['trabajador']) ?></td>
+                                    <td>
+                                        <span class="etiqueta <?= $claseEstado ?>">
+                                            <?= htmlspecialchars($r['estado']) ?>
+                                        </span>
+                                        <?php if ($r['prioridad'] !== 'Sin Asignar'): ?>
+                                            <span class="etiqueta <?= $clasePrioridad ?>" style="margin-top:4px; display:inline-block;">
+                                                <?= htmlspecialchars($r['prioridad']) ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="texto-apagado" style="white-space:nowrap;">
+                                        <?= date('d/m/Y H:i:s', strtotime($r['fecha_creacion'])) ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($pdfUrl): ?>
+                                            <a href="<?= htmlspecialchars($pdfUrl) ?>" target="_blank"
+                                               class="btn btn-fantasma btn-pequeno">Ver PDF</a>
+                                        <?php else: ?>
+                                            <span class="texto-apagado">—</span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
-                                <tr>
-                                    <td>Pedro Sánchez</td>
-                                    <td>Carlos López</td>
-                                    <td><span class="etiqueta etiqueta-pendiente">Aceptada</span></td>
-                                    <td class="texto-apagado">2023-09-25</td>
-                                    <td>Reporte de bug aceptado.</td>
-                                </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- GENERAR REPORTE  -->
-            <!-- La acción se define ya cuando el back-end esté listo -->
+            <!-- GENERAR REPORTE -->
             <div id="generar-reporte" class="section" style="display:none;">
-                <div class="tarjeta" style="max-width:620px;">
+                <div class="tarjeta" style="max-width:560px;">
                     <div class="tarjeta-encabezado">
-                        <div class="tarjeta-titulo">Generar Reporte</div>
+                        <div class="tarjeta-titulo">Generar Reporte de Período</div>
                     </div>
                     <div class="tarjeta-cuerpo">
-                        <form action="#" method="post">
-                            <div class="grupo-form">
-                                <label class="etiqueta-form" for="tipo-reporte">Tipo de reporte</label>
-                                <select class="campo-form" id="tipo-reporte" name="tipo-reporte" required>
-                                    <option value="">— Selecciona tipo —</option>
-                                    <option value="mensual">Mensual</option>
-                                    <option value="anual">Anual</option>
-                                    <option value="personalizado">Personalizado</option>
-                                </select>
-                            </div>
-                            <!-- Este div es un grid de dos columnas -->
+                        <div style="background:#f0f2f8; border-radius:8px; padding:14px 16px; margin-bottom:20px;">
+                            <p style="font-size:13px; color:#4a5568; line-height:1.6; margin:0;">
+                                Genera un <strong>PDF con todos los reportes de soporte aprobados</strong> dentro del período seleccionado.
+                                El documento incluye: área, técnico responsable, nombre de la solicitud, fecha de aprobación y espacio para firma.
+                            </p>
+                        </div>
+
+                        <form id="form-reporte-periodo"
+                              action="php/generar_reporte_admin.php"
+                              method="POST"
+                              target="_blank">
                             <div class="fila-form">
                                 <div class="grupo-form">
-                                    <label class="etiqueta-form" for="fecha-inicio">Fecha de inicio</label>
-                                    <input class="campo-form" type="date" id="fecha-inicio" name="fecha-inicio" required>
+                                    <label class="etiqueta-form" for="rp-fecha-inicio">Inicio del período</label>
+                                    <input class="campo-form" type="date" id="rp-fecha-inicio" name="fecha_inicio">
                                 </div>
                                 <div class="grupo-form">
-                                    <label class="etiqueta-form" for="fecha-fin">Fecha de fin</label>
-                                    <input class="campo-form" type="date" id="fecha-fin" name="fecha-fin" required>
+                                    <label class="etiqueta-form" for="rp-fecha-fin">Fin del período</label>
+                                    <input class="campo-form" type="date" id="rp-fecha-fin" name="fecha_fin">
                                 </div>
                             </div>
-                            <div class="grupo-form">
-                                <label class="etiqueta-form" for="descripcion-reporte">Descripción adicional</label>
-                                <textarea class="campo-form" id="descripcion-reporte" name="descripcion-reporte" rows="4" placeholder="Describe el reporte"></textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primario">Generar Reporte</button>
+
+                            <p id="rp-aviso" style="font-size:12px; color:#8f98b2; margin-bottom:14px; display:none;">
+                                Ambas fechas seleccionadas. Presiona el botón para continuar.
+                            </p>
+
+                            <button type="button" id="btn-generar-reporte"
+                                    class="btn btn-primario" disabled
+                                    onclick="confirmarGenerarReporte()">
+                                Generar Reporte PDF
+                            </button>
                         </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADMINISTRAR ÁREAS -->
+            <div id="admin-areas" class="section" style="display:none;">
+                <div class="tarjeta">
+                    <div class="tarjeta-encabezado">
+                        <div class="tarjeta-titulo">Administrar Áreas</div>
+                    </div>
+                    <div class="tarjeta-cuerpo" style="padding:20px;">
+                        <p style="color:#8f98b2; font-size:14px;">Sección en construcción.</p>
                     </div>
                 </div>
             </div>
@@ -224,7 +342,7 @@ $stmtUsuarios->close();
                             <thead>
                                 <tr>
                                     <th>Nombre</th>
-                                    <th>Usuario</th>
+                                    <th>Correo</th>
                                     <th>Rol</th>
                                     <th>Disponible</th>
                                     <th>Acciones</th>
@@ -252,7 +370,7 @@ $stmtUsuarios->close();
                                                 <strong><?= $nombreCompleto ?></strong>
                                             </div>
                                         </td>
-                                        <td class="texto-apagado"><?= htmlspecialchars($u->username) ?></td>
+                                        <td class="texto-apagado"><?= htmlspecialchars($u->correo) ?></td>
                                         <td><span class="etiqueta <?= $claseRol ?>"><?= htmlspecialchars($u->rol) ?></span></td>
                                         <td>
                                             <?php if ($u->disponible): ?>
@@ -265,7 +383,7 @@ $stmtUsuarios->close();
                                             <div class="acciones-tabla">
                                                 <!-- Todos los datos del usuario se pasan al JS para pre-rellenar el modal sin necesidad de un fetch -->
                                                 <button class="btn btn-advertencia btn-pequeno"
-                                                        onclick="openModal('edit', <?= $u->id_us ?>, '<?= htmlspecialchars($u->nombre) ?>', '<?= htmlspecialchars($u->app) ?>', '<?= htmlspecialchars($u->apm ?? "") ?>', '<?= htmlspecialchars($u->username) ?>', <?= $u->id_rol ?>)">
+                                                        onclick="openModal('edit', <?= $u->id_us ?>, '<?= htmlspecialchars($u->nombre) ?>', '<?= htmlspecialchars($u->app) ?>', '<?= htmlspecialchars($u->apm ?? "") ?>', '<?= htmlspecialchars($u->correo) ?>', <?= $u->id_rol ?>)">
                                                     Editar
                                                 </button>
                                                 <button class="btn btn-peligro btn-pequeno"
@@ -317,8 +435,8 @@ $stmtUsuarios->close();
                 </div>
 
                 <div class="grupo-form">
-                    <label class="etiqueta-form" for="user-name">Usuario/Username</label>
-                    <input class="campo-form" type="text" id="user-name" name="username" maxlength="50" required>
+                    <label class="etiqueta-form" for="user-correo">Correo electrónico</label>
+                    <input class="campo-form" type="email" id="user-correo" name="correo" maxlength="100" required>
                 </div>
 
                 <!-- La nota se muestra en modo edición -->
@@ -361,5 +479,29 @@ $stmtUsuarios->close();
         navegarSeccion("<?= htmlspecialchars($seccionActiva) ?>", titulosSecciones);
     </script>
     <?php endif; ?>
+
+    <!-- Modal: confirmación de generar reporte de período -->
+    <div id="modalConfirmarReporte" class="fondo-modal">
+        <div class="modal" style="max-width:440px;">
+            <div class="modal-encabezado">
+                <div class="modal-titulo">Confirmar generación</div>
+                <button class="modal-cerrar" onclick="cerrarModalReporte()">✕</button>
+            </div>
+            <div class="modal-divisor"></div>
+            <div style="padding:20px 24px 8px;">
+                <p style="color:#4a5568; line-height:1.6; font-size:14px; margin:0 0 10px;">
+                    Al generar el reporte del período, <strong>los registros de la base de datos serán reiniciados</strong>.
+                    Esta acción no se puede deshacer.
+                </p>
+                <p style="color:#4a5568; line-height:1.6; font-size:14px; margin:0;">
+                    ¿Deseas continuar y generar el reporte PDF?
+                </p>
+            </div>
+            <div class="modal-pie">
+                <button type="button" class="btn btn-peligro" onclick="ejecutarGenerarReporte()">Continuar</button>
+                <button type="button" class="btn btn-fantasma" onclick="cerrarModalReporte()">Cancelar</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

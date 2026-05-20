@@ -21,9 +21,9 @@ create table usuario(
     nombre varchar(50) not null, # INDICE ORDINARIO (nombre, app, apm)
     app varchar(50) not null,
     apm varchar(50),
-    username varchar(50) not null unique,
+    correo varchar(100) not null unique, -- El usuario ahora es un correo [MODIFICACIÓN]
     contrasena varchar(255) not null,
-    id_rol int not null,
+    id_rol int not null, -- YA NO TIENE id_area [REMOVIDO]
     disponible boolean default true, # INDICE ORDINARIO
     primary key(id_us),
     foreign key(id_rol) references rol(id_rol) on update cascade,
@@ -43,10 +43,10 @@ create table solicitud(
     id_estado int not null default 1,
     id_area int not null,
     encabezado varchar(255) not null,
-    descripcion text not null,
+    descripcion text not null,	
     prioridad enum('Sin Asignar','Baja','Media','Alta') not null, # INDICE ORDINARIO
     fecha_creacion datetime default current_timestamp, # INDICE ORDINARIO
-    fecha_limite DATETIME DEFAULT (CURRENT_TIMESTAMP + INTERVAL 1 WEEK),
+    fecha_limite DATETIME DEFAULT (CURRENT_TIMESTAMP + INTERVAL 2 HOUR), -- CAMBIADO DE 1 WEEK A 2 HOUR
     primary key(id_sol),
     foreign key(id_us) references usuario(id_us)
         on delete cascade,
@@ -88,10 +88,11 @@ create table bitacora(
     id_us int not null,
     encabezado varchar(50) not null,
     descripcion_problema text not null, # INDICE TEXTO COMPLETO
-    descripcion_solucion text not null,
+    descripcion_solucion text not null, -- SEPARADOS, [NUEVO]
     evidencia text,
     fecha_registro datetime default current_timestamp, # INDICE ORDINARIO
     aprobado boolean default false,
+    razon_rechazo text null, -- [NUEVO]
     primary key(id_bit),
     foreign key(id_sol) references solicitud(id_sol)
         on delete cascade,

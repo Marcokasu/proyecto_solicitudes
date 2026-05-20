@@ -35,10 +35,10 @@
             <form action="" method="post">
 
                 <div class="grupo-form">
-                    <label class="etiqueta-form" for="username">Usuario</label>
+                    <label class="etiqueta-form" for="correo">Correo electrónico</label>
                     <div class="campo-c">
                     <!-- .campo-c hace referencia a la posición relativa para el botón/input -->
-                        <input class="campo-form" type="text" id="username" name="username" placeholder="Nombre de usuario" required>
+                        <input class="campo-form" type="email" id="correo" name="correo" placeholder="correo@ejemplo.com" required>
                     </div>
                 </div>
 

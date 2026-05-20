@@ -13,7 +13,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
         $nombre     = trim($_POST["nombre"]     ?? "");
         $app        = trim($_POST["app"]        ?? "");
         $apm        = trim($_POST["apm"]        ?? "") ?: null; // Opcional, NULL si está vacío.
-        $username   = trim($_POST["username"]   ?? "");
+        $correo     = trim($_POST["correo"]      ?? "");
         $password   = $_POST["password"]        ?? "";
         $password2  = $_POST["password2"]       ?? "";
         $id_rol     = (int)($_POST["id_rol"]    ?? 0);
@@ -21,8 +21,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
 
         // 2.- Validaciones
         $errores = [];
-        if (empty($nombre) || empty($app) || empty($username)) {
-            $errores[] = "Los campos 'Nombre', 'Apellido Paterno' y 'Usuario/Username' son obligatorios.";
+        if (empty($nombre) || empty($app) || empty($correo)) {
+            $errores[] = "Los campos 'Nombre', 'Apellido Paterno' y 'Correo' son obligatorios.";
+        } elseif (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+            $errores[] = "El correo electrónico no tiene un formato válido.";
         }
         if (strlen($password) < 8) {
             $errores[] = "La contraseña debe tener al menos 8 caracteres.";
@@ -42,16 +44,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
             exit();
         }
 
-        // 3. Verificar que el username no exista en la BD
+        // 3. Verificar que el correo no exista en la BD
         $statementCheck = $conexion->prepare(
-            "SELECT id_us FROM usuario WHERE username = ?"
+            "SELECT id_us FROM usuario WHERE correo = ?"
         );
-        $statementCheck->bind_param("s", $username);
+        $statementCheck->bind_param("s", $correo);
         $statementCheck->execute();
         $statementCheck->store_result();
         if ($statementCheck->num_rows > 0) {
             $statementCheck->close();
-            $_SESSION["error"] = "El nombre de usuario ya existe.";
+            $_SESSION["error"] = "El correo electrónico ya está registrado.";
             $_SESSION["seccion_activa"] = "admin-usuarios";
             header("Location: ../Administrador.php");
             exit();
@@ -61,12 +63,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
         // 4. Hasheo de contraseña e inserción
         $hash = password_hash($password, PASSWORD_BCRYPT);
         $statement = $conexion->prepare(
-            "INSERT INTO usuario (nombre, app, apm, username, contrasena, id_rol, disponible)
+            "INSERT INTO usuario (nombre, app, apm, correo, contrasena, id_rol, disponible)
             VALUES (?, ?, ?, ?, ?, ?, ?)"
         );
         $statement->bind_param(
             "sssssii",
-            $nombre, $app, $apm, $username,
+            $nombre, $app, $apm, $correo,
             $hash, $id_rol, $disponible
         );
         if ($statement->execute()) {
@@ -88,15 +90,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
         $nombre   = trim($_POST["nombre"]    ?? "");
         $app      = trim($_POST["app"]       ?? "");
         $apm      = trim($_POST["apm"]       ?? "") ?: null; // Opcional, NULL si está vacío.
-        $username = trim($_POST["username"]  ?? "");
+        $correo   = trim($_POST["correo"]    ?? "");
         $password = $_POST["password"]       ?? "";
         $password2= $_POST["password2"]      ?? "";
         $id_rol   = (int)($_POST["id_rol"]   ?? 0);
 
         // 2.- Validaciones
         $errores = [];
-        if (empty($nombre) || empty($app) || empty($username)) {
-            $errores[] = "Los campos 'Nombre', 'Apellido Paterno' y 'Usuario/Username' son obligatorios.";
+        if (empty($nombre) || empty($app) || empty($correo)) {
+            $errores[] = "Los campos 'Nombre', 'Apellido Paterno' y 'Correo' son obligatorios.";
+        } elseif (!filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+            $errores[] = "El correo electrónico no tiene un formato válido.";
         }
         if (!in_array($id_rol, [1, 2])) {
             $errores[] = "Rol no válido.";
@@ -110,16 +114,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
                 $errores[] = "Las contraseñas no coinciden.";
             }
         }
-        
-        // 3.- Verificar que el username no exista en la BD (excluyendo al propio usuario)
+
+        // 3.- Verificar que el correo no exista en la BD (excluyendo al propio usuario)
         $statementCheck = $conexion->prepare(
-            "SELECT id_us FROM usuario WHERE username = ? AND id_us != ?"
+            "SELECT id_us FROM usuario WHERE correo = ? AND id_us != ?"
         );
-        $statementCheck->bind_param("si", $username, $id_us);
+        $statementCheck->bind_param("si", $correo, $id_us);
         $statementCheck->execute();
         $statementCheck->store_result();
         if ($statementCheck->num_rows > 0) {
-            $errores[] = "El nombre de usuario ya existe.";
+            $errores[] = "El correo electrónico ya está registrado.";
         }
         $statementCheck->close();
 
@@ -136,22 +140,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
             // 4a. Con nuevo hasheo de contraseña
             $hash = password_hash($password, PASSWORD_BCRYPT);
             $statement = $conexion->prepare(
-                "UPDATE usuario SET nombre=?, app=?, apm=?, username=?, contrasena=?, id_rol=?
+                "UPDATE usuario SET nombre=?, app=?, apm=?, correo=?, contrasena=?, id_rol=?
                  WHERE id_us=?"
             );
             $statement->bind_param(
                 "sssssii",
-                $nombre, $app, $apm, $username, $hash, $id_rol, $id_us
+                $nombre, $app, $apm, $correo, $hash, $id_rol, $id_us
             );
         } else {
             // 4b. Sin cambio de contraseña
             $statement = $conexion->prepare(
-                "UPDATE usuario SET nombre=?, app=?, apm=?, username=?, id_rol=?
+                "UPDATE usuario SET nombre=?, app=?, apm=?, correo=?, id_rol=?
                  WHERE id_us=?"
             );
             $statement->bind_param(
                 "ssssii",
-                $nombre, $app, $apm, $username, $id_rol, $id_us
+                $nombre, $app, $apm, $correo, $id_rol, $id_us
             );
         }
         if ($statement->execute()) {
@@ -174,13 +178,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["accion"])) {
             "DELETE FROM usuario WHERE id_us = ? AND id_rol != 3"
         );
         $statement->bind_param("i", $id_us);
-        if ($statement->execute() && $statement->affected_rows > 0) {
-            $statement->close();
-            $_SESSION["exito"] = "Usuario eliminado correctamente.";
-        } else {
-            $statement->close();
-            $_SESSION["error"] = "No se pudo eliminar el usuario.";
+        try {
+            if ($statement->execute() && $statement->affected_rows > 0) {
+                $_SESSION["exito"] = "Usuario eliminado correctamente.";
+            } else {
+                $_SESSION["error"] = "No se pudo eliminar el usuario.";
+            }
+        } catch (mysqli_sql_exception $e) {
+            $_SESSION["error"] = "No se puede eliminar este usuario porque tiene solicitudes o asignaciones registradas en el sistema.";
         }
+        $statement->close();
         $_SESSION["seccion_activa"] = "admin-usuarios";
         header("Location: ../Administrador.php");
         exit();

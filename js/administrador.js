@@ -1,13 +1,14 @@
 var titulosSecciones = {
     bitacora:          'Bitácora',
     'generar-reporte': 'Generar Reporte',
-    'admin-usuarios':  'Administrar Usuarios'
+    'admin-usuarios':  'Administrar Usuarios',
+    'admin-areas':     'Administrar Áreas'
 };
 
 inicializarNavegacion(titulosSecciones);
 
 // Modal que cambia dependiendo de si se está agregando un usuario nuevo o editando a uno existente 
-function openModal(action, id, nombre, app, apm, username, idRol) {
+function openModal(action, id, nombre, app, apm, correo, idRol) {
     nombre = nombre || '';
     app    = app    || '';
     apm    = apm    || '';
@@ -33,7 +34,7 @@ function openModal(action, id, nombre, app, apm, username, idRol) {
         document.getElementById('user-nombre').value    = '';
         document.getElementById('user-app').value       = '';
         document.getElementById('user-apm').value       = '';
-        document.getElementById('user-name').value      = '';
+        document.getElementById('user-correo').value    = '';
         inputPass.value                                  = '';
         inputPass2.value                                 = '';
         document.getElementById('user-role').value      = '';
@@ -52,7 +53,7 @@ function openModal(action, id, nombre, app, apm, username, idRol) {
         document.getElementById('user-nombre').value    = nombre;
         document.getElementById('user-app').value       = app;
         document.getElementById('user-apm').value       = apm;
-        document.getElementById('user-name').value      = username;
+        document.getElementById('user-correo').value    = correo;
         inputPass.value                                  = '';
         inputPass2.value                                 = '';
         document.getElementById('user-role').value      = idRol;
@@ -93,6 +94,50 @@ function deleteUser(id, nombre) {
     }
 }
 
+// Filtrado de la bitácora
+(function () {
+    var inputBuscar  = document.getElementById("buscar-bitacora");
+    var selectEstado = document.getElementById("filtro-estado-bitacora");
+    var selectArea   = document.getElementById("filtro-area-bitacora");
+
+    if (!inputBuscar || !selectEstado || !selectArea) return;
+
+    function filtrar() {
+        var texto  = inputBuscar.value.toLowerCase().trim();
+        var estado = selectEstado.value;
+        var area   = selectArea.value;
+        var hayResultados = false;
+
+        document.querySelectorAll("#tabla-bitacora tr").forEach(function (fila) {
+            if (fila.querySelector("td[colspan]")) return;
+
+            var textoDato  = (fila.dataset.texto  || "");
+            var estadoDato = (fila.dataset.estado || "");
+            var areaDato   = (fila.dataset.area   || "");
+
+            var ok = (!texto  || textoDato.includes(texto))
+                  && (!estado || estadoDato === estado)
+                  && (!area   || areaDato   === area);
+
+            fila.style.display = ok ? "" : "none";
+            if (ok) hayResultados = true;
+        });
+
+        var sinResultados = document.getElementById("bitacora-sin-resultados");
+        if (!sinResultados) {
+            sinResultados = document.createElement("tr");
+            sinResultados.id = "bitacora-sin-resultados";
+            sinResultados.innerHTML = '<td colspan="6" style="text-align:center;color:#8f98b2;">Sin resultados para los filtros aplicados.</td>';
+            document.getElementById("tabla-bitacora").appendChild(sinResultados);
+        }
+        sinResultados.style.display = hayResultados ? "none" : "";
+    }
+
+    inputBuscar.addEventListener("input", filtrar);
+    selectEstado.addEventListener("change", filtrar);
+    selectArea.addEventListener("change", filtrar);
+})();
+
 // Filtrado de tabla de usuarios para la barra de búsqueda, después se pasará a comun.js
 (function () {
     var inputBuscar = document.getElementById("buscar-usuario");
@@ -111,10 +156,10 @@ function deleteUser(id, nombre) {
             }
 
             var nombre   = (fila.cells[0]?.textContent || "").toLowerCase();
-            var username = (fila.cells[1]?.textContent || "").toLowerCase();
+            var correo   = (fila.cells[1]?.textContent || "").toLowerCase();
             var rolFila  = (fila.cells[2]?.textContent || "").toLowerCase();
 
-            var coincideTexto = nombre.includes(texto) || username.includes(texto);
+            var coincideTexto = nombre.includes(texto) || correo.includes(texto);
             var coincideRol   = rol === "" || rolFila.includes(rol);
 
             fila.style.display = coincideTexto && coincideRol ? "" : "none";
@@ -123,3 +168,35 @@ function deleteUser(id, nombre) {
     inputBuscar.addEventListener("input", filtrar);
     selectRol.addEventListener("change", filtrar);
 })();
+
+// ── Generar Reporte de Período ────────────────────────────────────────────────
+(function () {
+    var inicio = document.getElementById('rp-fecha-inicio');
+    var fin    = document.getElementById('rp-fecha-fin');
+    var btn    = document.getElementById('btn-generar-reporte');
+    var aviso  = document.getElementById('rp-aviso');
+
+    if (!inicio || !fin || !btn) return;
+
+    function actualizar() {
+        var ok = inicio.value.trim() !== '' && fin.value.trim() !== '';
+        btn.disabled = !ok;
+        if (aviso) aviso.style.display = ok ? '' : 'none';
+    }
+
+    inicio.addEventListener('change', actualizar);
+    fin.addEventListener('change', actualizar);
+})();
+
+function confirmarGenerarReporte() {
+    document.getElementById('modalConfirmarReporte').classList.add('abierto');
+}
+
+function cerrarModalReporte() {
+    document.getElementById('modalConfirmarReporte').classList.remove('abierto');
+}
+
+function ejecutarGenerarReporte() {
+    cerrarModalReporte();
+    document.getElementById('form-reporte-periodo').submit();
+}

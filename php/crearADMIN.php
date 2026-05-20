@@ -9,19 +9,18 @@ require_once "conexion.php";
 $nombre     = "Admin";
 $app        = "Principal";
 $apm        = null;
-$username   = "admin";
+$correo     = "admin@itsrv.edu.mx";  // Cambia esto al correo real del administrador
 $password   = "cebollines";
 $id_rol     = 3;
-$id_area    = 1;
 $disponible = 1;
 
 $hash = password_hash($password, PASSWORD_BCRYPT);
 
 $statement = $conexion->prepare(
-    "INSERT INTO usuario (nombre, app, apm, username, contrasena, id_rol, disponible, id_area)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO usuario (nombre, app, apm, correo, contrasena, id_rol, disponible)
+    VALUES (?, ?, ?, ?, ?, ?, ?)"
 );
-$statement->bind_param("sssssiii", $nombre, $app, $apm, $username, $hash, $id_rol, $disponible, $id_area);
+$statement->bind_param("sssssii", $nombre, $app, $apm, $correo, $hash, $id_rol, $disponible);
 
 if ($statement->execute()) {
     echo "Administrador creado correctamente. <strong>Borrar este archivo cuando ya no sea necesario.</strong>";
